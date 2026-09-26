@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import time
 from pathlib import Path
 
@@ -70,6 +71,12 @@ EMOTIONS = {
     "doubtful": "curious, wondering",
     "sad": "a little lonely",
 }
+# 首の向け方。「相手」の位置はセンサが無いので正面（yaw 0）とみなす
+FACE_POSE = {"yaw": 0, "pitch": int(os.environ.get("BRAIN_FACE_PITCH", "20"))}
+# 見回しは Jev に聞かず、ルールで動かす（聞き取り中に誰も話さない時間が続いたら、ランダムな間隔でよそ見）
+IDLE_GLANCE_AFTER = float(os.environ.get("BRAIN_IDLE_GLANCE_AFTER", "25"))
+IDLE_GLANCE_GAP = (float(os.environ.get("BRAIN_IDLE_GLANCE_GAP_MIN", "30")), float(os.environ.get("BRAIN_IDLE_GLANCE_GAP_MAX", "60")))
+
 # llm モードで LLM に渡す指示（会話履歴には user 発話として残る）
 LLM_INSTRUCTIONS = {
     "follow_up": "（ロボットから話しかける場面です。直前の会話の話題を踏まえて、一言だけ自然に話しかけてください。許可は求めないでください）",
@@ -123,6 +130,7 @@ class Judge:
         # 相手が離れた / 無視された と判定したセッションは、次にユーザーが話すまで判定しない
         # session.id -> 判定時点の last_user_at
         self.dormant: dict[str, float] = {}
+        self.next_glance_gap: dict[str, float] = {}  # session.id -> 次のよそ見までの間隔
 
     async def start(self, app) -> None:
         self.record_dir.mkdir(parents=True, exist_ok=True)
@@ -218,7 +226,25 @@ class Judge:
             a["emotion"] = "neutral"
         return a
 
+    def _maybe_glance(self, session: Session) -> None:
+        """聞き取り中に誰も話さない時間が続いたら、ときどきよそ見する（反射に近い振る舞いなので Jev は使わない）。"""
+        if session.state != "listening" or not session.session_id:
+            return
+        now = time.time()
+        quiet_since = max(session.last_user_at, session.last_robot_end_at, session.started_at)
+        if now - quiet_since < IDLE_GLANCE_AFTER:
+            return
+        gap = self.next_glance_gap.setdefault(session.id, random.uniform(*IDLE_GLANCE_GAP))
+        if now - max(session.last_head_move_at, quiet_since) < gap:
+            return
+        self.next_glance_gap[session.id] = random.uniform(*IDLE_GLANCE_GAP)
+        yaw, pitch = random.choice((-1, 1)) * random.randint(15, 35), random.randint(10, 30)
+        session.last_head_move_at = now  # 応答を待たずに次の判定を抑える
+        asyncio.create_task(self._glance(session, yaw, pitch))
+        log.info("[%s] idle glance yaw=%d pitch=%d", session.device_id, yaw, pitch)
+
     async def judge(self, session: Session) -> None:
+        self._maybe_glance(session)
         mood = self._update_mood(session)
         if session.id in self.dormant:
             if session.last_user_at <= self.dormant[session.id]:
@@ -262,6 +288,8 @@ class Judge:
                 mode, text = "llm", LLM_INSTRUCTIONS[kind]
             try:
                 await self.relay.send_emotion(session, ans["emotion"])
+                # 話しかける時は相手の方を向く（応答は待たない）
+                asyncio.create_task(self._safe_head(session, FACE_POSE["yaw"], FACE_POSE["pitch"], 250))
                 await self.relay.inject(text, mode, session.device_id)
                 self.pending[session.device_id] = time.time()
                 action = {"mode": mode, "kind": kind, "text": text, "emotion": ans["emotion"]}
@@ -276,6 +304,19 @@ class Judge:
                       "source": source, "latency_s": latency, "state": state, "threshold": round(threshold, 2),
                       "answers": {k: v for k, v in ans.items() if k != "raw"}, "raw": ans.get("raw"),
                       "action": action})
+
+    async def _safe_head(self, session: Session, yaw: int, pitch: int, speed: int) -> None:
+        try:
+            await self.relay.move_head(session, yaw, pitch, speed)
+        except Exception as e:  # noqa: BLE001 首が動かなくても会話は続ける
+            log.warning("[%s] head move failed: %s", session.device_id, e)
+
+    async def _glance(self, session: Session, yaw: int, pitch: int) -> None:
+        """よそ見して、少ししたら正面に戻る。"""
+        await self._safe_head(session, yaw, pitch, 150)
+        await asyncio.sleep(random.uniform(2.5, 4.5))
+        if session.state == "listening":
+            await self._safe_head(session, FACE_POSE["yaw"], FACE_POSE["pitch"], 150)
 
     async def loop(self) -> None:
         while True:

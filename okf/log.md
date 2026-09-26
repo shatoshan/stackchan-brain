@@ -1,6 +1,7 @@
 # Update Log
 
 ## 2026-09-26
+* **Milestone**: M3 達成。brain が端末 MCP を直接呼んで首を動かす（話す時は正面、沈黙が続くとよそ見）。人間が実機で、話しかけ・首振り・見回しを確認。[brain](/services/brain.md)、[直感層の質問設計](/design/jev-questions.md) を更新。
 * **Creation**: [直感層の質問設計](/design/jev-questions.md)（draft）。M3 ステップ3 の判定ループ（`brain/judge.py`）と evals（`evals/cases.jsonl`、`evals/run.py`）。「話すべき確率」ではなく状況を分類させる方式に。実機で、沈黙時は話題の続きを自分から話し、「出かけてくる」の後は黙ることを人間が確認。
 * **Finding**: Jev が混雑で 429 を頻発。[Jev](/external/jev.md) に記録。brain は Jev を一時停止して LLM 分類で代替する。
 * **Update**: [brain](/services/brain.md)、[状態ブロブ](/design/state-blob.md) を実装に合わせて更新。

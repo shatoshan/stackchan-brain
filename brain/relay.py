@@ -40,6 +40,10 @@ def normalize(text: str) -> str:
     return "".join(c for c in text if c not in PUNCT)
 
 
+# brain が端末 MCP を直接呼ぶ時の JSON-RPC id。xiaozhi-server の id（小さい連番）とぶつからない範囲
+BRAIN_MCP_ID_BASE = 900_000
+
+
 class InjectError(Exception):
     """差し込めない（状態が合わない等）。"""
 
@@ -65,6 +69,9 @@ class Session:
     _robot_buf: list = field(default_factory=list)
     # 差し込んだ文の stt は端末に流さない（画面に「ユーザー発話」として出るのを防ぐ）
     suppress_stt: set = field(default_factory=set)
+    # brain が端末 MCP ツールを呼んだ時の応答待ち（id -> Future）
+    mcp_pending: dict = field(default_factory=dict)
+    last_head_move_at: float = 0.0
 
     def info(self) -> dict:
         now = time.time()
@@ -186,6 +193,28 @@ class Relay:
         await session.device_ws.send_str(json.dumps(msg))
         self._record(session, "brain-down", msg)
 
+    async def call_device_tool(self, session: Session, name: str, arguments: dict, timeout: float = 5.0) -> dict:
+        """端末の MCP ツール（例 self.robot.set_head_angles）を brain から直接呼ぶ。"""
+        rpc_id = BRAIN_MCP_ID_BASE + session.injections * 1000 + len(session.mcp_pending) + int(time.time() * 10) % 1000
+        fut = asyncio.get_running_loop().create_future()
+        session.mcp_pending[rpc_id] = fut
+        msg = {"session_id": session.session_id, "type": "mcp",
+               "payload": {"jsonrpc": "2.0", "id": rpc_id, "method": "tools/call",
+                           "params": {"name": name, "arguments": arguments}}}
+        await session.device_ws.send_str(json.dumps(msg, ensure_ascii=False))
+        self._record(session, "brain-down", msg)
+        try:
+            return await asyncio.wait_for(fut, timeout)
+        finally:
+            session.mcp_pending.pop(rpc_id, None)
+
+    async def move_head(self, session: Session, yaw: int, pitch: int, speed: int = 200) -> dict:
+        result = await self.call_device_tool(session, "self.robot.set_head_angles",
+                                             {"yaw": yaw, "pitch": pitch, "speed": speed})
+        session.last_head_move_at = time.time()
+        log.info("[%s] head -> yaw=%d pitch=%d", session.device_id, yaw, pitch)
+        return result
+
     async def _pump(self, session: Session, source, sink, direction: str) -> str:
         """source から sink へ流し続け、source 側が閉じたら direction を返す。"""
         async for msg in source:
@@ -197,6 +226,15 @@ class Relay:
                     await sink.send_str(msg.data)
                     self._record(session, direction, msg.data)
                     continue
+                # brain が呼んだ端末 MCP ツールの応答は xiaozhi-server に流さず brain で受け取る
+                if direction == "up" and data.get("type") == "mcp":
+                    rpc_id = (data.get("payload") or {}).get("id")
+                    if rpc_id in session.mcp_pending:
+                        fut = session.mcp_pending.pop(rpc_id)
+                        if not fut.done():
+                            fut.set_result(data["payload"])
+                        self._record(session, "brain-up", data)
+                        continue
                 # サーバーは stt の句読点を一部落とすので正規化して比べる
                 if direction == "down" and data.get("type") == "stt" and normalize(str(data.get("text", ""))) in session.suppress_stt:
                     session.suppress_stt.discard(normalize(str(data["text"])))
@@ -274,7 +312,20 @@ def create_control_app(relay: Relay) -> web.Application:
             return web.json_response({"ok": False, "error": str(e)}, status=409)
         return web.json_response({"ok": True, "session": info})
 
+    async def head(request: web.Request) -> web.Response:
+        body = await request.json()
+        candidates = [x for x in relay.sessions.values() if body.get("device_id") in (None, x.device_id)]
+        if not candidates:
+            return web.json_response({"ok": False, "error": "no active session"}, status=409)
+        session = max(candidates, key=lambda x: x.last_activity)
+        try:
+            result = await relay.move_head(session, int(body.get("yaw", 0)), int(body.get("pitch", 15)), int(body.get("speed", 200)))
+        except asyncio.TimeoutError:
+            return web.json_response({"ok": False, "error": "device did not answer"}, status=504)
+        return web.json_response({"ok": True, "result": result})
+
     app = web.Application()
+    app.router.add_post("/head", head)
     app.router.add_get("/sessions", sessions)
     app.router.add_post("/say", say)
     return app

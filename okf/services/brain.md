@@ -18,6 +18,9 @@ sources:
   - id: m3-inject
     resource: process:claude-code-session-2026-09-26
     title: 2026-09-26 M3 ステップ2 差し込み試験（疑似デバイス・実機）
+  - id: m3-head
+    resource: process:claude-code-session-2026-09-26
+    title: 2026-09-26 M3 首振り試験（/head と判定ループ、実機）
 ---
 
 # 役割
@@ -57,6 +60,13 @@ curl -s -X POST 127.0.0.1:8011/say -d '{"mode":"llm","text":"（ロボットか�
 - 判定はすべて `data/brain/judgments/YYYYMMDD.jsonl` に記録（状態ブロブ、閾値、答え、Jev の生の確率、行動）。evals の素材にする。
 - 機嫌（0〜1、初期 0.6）は、自発発話に返事があれば +0.1、なければ −0.1。
 - 表情は判定結果を `{"type":"llm","emotion":...}` として brain から端末へ直接送る。
+- 首: 話しかける時は正面（yaw 0、pitch 20）を向く。聞き取り中に 25 秒以上誰も話さないと、30〜60 秒のランダムな間隔でよそ見（yaw ±15〜35、pitch 10〜30）して 2.5〜4.5 秒で正面に戻る。よそ見は判定を休止したセッションでも続ける。
+  - 見回しは当初 Jev の `attention` 質問で決めていたが、話さない判定が来る場面がほとんど無く、Jev / LLM も `look_around` を選ばなかったため、ルールに移した（反射に近い振る舞いなので Jev を使わない）。
+
+# 端末 MCP ツールの直接呼び出し
+
+- brain は `{"type":"mcp","payload":{"method":"tools/call",...}}` を端末へ直接送る。JSON-RPC の id は 900000 台（xiaozhi-server の小さい連番とぶつからない）。端末からの応答は brain が受け取り、xiaozhi-server には流さない。[^code]
+- 操作 API `POST /head {"yaw","pitch","speed"}` でも動かせる。実機で応答 0.08〜0.15 秒、ロボットの発話中に動かしても会話に影響しない。人間が物理的な動きを確認。[^m3-head]
 - `BRAIN_JUDGE_ENABLED=0` で止められる。閾値・間隔などは `BRAIN_*` 環境変数（`judge.py` 冒頭）。
 
 # 実測（2026-09-26）
@@ -70,3 +80,4 @@ curl -s -X POST 127.0.0.1:8011/say -d '{"mode":"llm","text":"（ロボットか�
 [^decision]: 決定 007
 [^m3-relay]: 2026-09-26 M3 ステップ1 試験
 [^m3-inject]: 2026-09-26 M3 ステップ2 差し込み試験
+[^m3-head]: 2026-09-26 M3 首振り試験

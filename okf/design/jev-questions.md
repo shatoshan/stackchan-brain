@@ -40,6 +40,8 @@ sources:
 | `phrase` | choice | 定型フレーズ 5 種（`fixed_phrase` の時だけ使う） |
 | `emotion` | choice | `neutral`、`happy`、`doubtful`、`sad`（StackChan の表情名。`sleepy` は眠りポーズに入るので使わない） |
 
+- 首の見回しは Jev に聞かない（ルール）。`attention` 質問は試したが、実機で `look_around` が一度も選ばれず、話さない判定の場面もほとんど来なかったので外した。→ [brain](/services/brain.md)
+
 [^code]
 
 # 「話すべき確率」を直接聞かない理由（2026-09-26 の比較）
