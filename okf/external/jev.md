@@ -44,6 +44,9 @@ sources:
   - id: run-0926
     resource: process:claude-code-session-2026-09-26
     title: 2026-09-26 llm-proxy 経由での実呼び出し
+  - id: run-0926b
+    resource: process:claude-code-session-2026-09-26
+    title: 2026-09-26 M3 判定ループでの利用
   - id: v-catalog
     resource: https://ai-gateway.vercel.sh/v1/models
     title: AI Gateway モデルカタログ（2026-09-26）
@@ -63,6 +66,14 @@ sources:
 - **Vercel の無料枠でも使える**（同じキーで GPT-6 Luna は 403）。[^run-0926]
 - 上流（typesafe-ai）の処理時間 約 160ms、コスト \$0.000012。ルーティングは `typesafe-ai` 優先、フォールバック `digitalocean`。[^run-0926]
 - `providerMetadata.typesafe.confidence` キーは Gateway 経由でも存在するが、boolean 質問では空オブジェクトだった。確率本体は `answers` 側。[^run-0926]
+
+# 使ってみて分かったこと（2026-09-26、M3）
+
+- `score` 型は `criteria` に段階ごとの説明の **配列** が必須（無いと 400 `questions.<name>.criteria: expected array`）。答えは 0 始まりの段階ごとの確率と、その期待値 `score`。[^run-0926b]
+- `choice` の答えには `probabilities` に加えて `confidence` が付く。[^run-0926b]
+- 4 問（choice 4 つ）で約 0.5〜0.6 秒、1 回 $0.000025〜0.000037。[^run-0926b]
+- **混雑による 429 が頻発する。** `rate_limit_exceeded`「The upstream provider is currently experiencing high demand」。最小のリクエストでも同じで、こちらのリクエスト内容とは無関係。約 30 分の試験中、成功は数回だけだった。brain は 429 で Jev を 60 秒〜10 分止め、その間は LLM の分類で代替する。[^run-0926b]
+- 使い方の設計は [直感層の質問設計](/design/jev-questions.md)。
 
 # 何に使うか
 
@@ -127,5 +138,6 @@ sources:
 [^v-what]: What is Jev
 [^v-catalog]: AI Gateway モデルカタログ
 [^run-0926]: 2026-09-26 実呼び出し
+[^run-0926b]: 2026-09-26 M3 判定ループでの利用
 [^or-jev]: OpenRouter — Jev guide
 [^cf-jev]: Cloudflare Workers AI — typesafe/jev

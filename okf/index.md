@@ -37,6 +37,7 @@ okf_version: "0.2"
 
 * [3層アーキテクチャ](design/three-layer-architecture.md) - 反射（端末）/ 直感（Jev）/ 熟考（GPT-6 Luna）に役割と時間スケールを分ける全体設計。
 * [状態ブロブ仕様](design/state-blob.md) - 直感層に毎周期渡す固定フォーマット JSON。（draft）
+* [直感層の質問設計](design/jev-questions.md) - Jev に状況を分類させる理由、ルール・閾値との分担、evals。（draft）
 
 # decisions — 決定記録
 

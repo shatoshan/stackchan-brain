@@ -1,6 +1,9 @@
 # Update Log
 
 ## 2026-09-26
+* **Creation**: [直感層の質問設計](/design/jev-questions.md)（draft）。M3 ステップ3 の判定ループ（`brain/judge.py`）と evals（`evals/cases.jsonl`、`evals/run.py`）。「話すべき確率」ではなく状況を分類させる方式に。実機で、沈黙時は話題の続きを自分から話し、「出かけてくる」の後は黙ることを人間が確認。
+* **Finding**: Jev が混雑で 429 を頻発。[Jev](/external/jev.md) に記録。brain は Jev を一時停止して LLM 分類で代替する。
+* **Update**: [brain](/services/brain.md)、[状態ブロブ](/design/state-blob.md) を実装に合わせて更新。
 * **Decision**: 無音タイムアウトの既定を 600 秒に（human:shingo）。差し込み時の実機画面に問題がないことを human:shingo が確認。
 * **Update**: [brain](/services/brain.md) に発話の差し込み（M3 ステップ2、操作 API `127.0.0.1:8011` の `/sessions`・`/say`）。実機で verbatim / llm の両方で自分から話しかけられることを確認。
 * **Finding**: 無音タイムアウト 600 秒で、実機セッションは 649 秒維持されサーバー側で閉じた（端末からは切れない、閉じた後は再接続しない）。[決定 007](/decisions/007-proactive-speech-path.md) に前提の検証結果を記録。

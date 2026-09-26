@@ -1,17 +1,23 @@
-"""brain のエントリポイント。端末 ⇔ xiaozhi-server の中継（8010）と操作 API（8011）を起動する。"""
+"""brain のエントリポイント。中継（8010）、操作 API（8011）、判定ループを起動する。"""
 
 import asyncio
 import logging
 import os
+from pathlib import Path
 
 from aiohttp import web
 
+from judge import Judge
 from relay import create_app, create_control_app
 
 
 async def serve() -> None:
     relay_app = create_app()
     control_app = create_control_app(relay_app["relay"])
+    if os.environ.get("BRAIN_JUDGE_ENABLED", "1") == "1":
+        judge = Judge(relay_app["relay"], Path(os.environ.get("BRAIN_JUDGMENT_DIR", "/data/judgments")))
+        control_app.on_startup.append(judge.start)
+        control_app.on_cleanup.append(judge.stop)
     runners = []
     for app, port in ((relay_app, int(os.environ.get("BRAIN_PORT", "8010"))),
                       (control_app, int(os.environ.get("BRAIN_CONTROL_PORT", "8011")))):

@@ -67,11 +67,15 @@ services:
       TZ: Asia/Tokyo
       BRAIN_UPSTREAM_WS: ws://xiaozhi-server:8000/xiaozhi/v1/
       BRAIN_SESSION_LOG_DIR: /data/sessions
+      BRAIN_JUDGMENT_DIR: /data/judgments
+      BRAIN_JUDGE_ENABLED: ${BRAIN_JUDGE_ENABLED:-1}
+      LLM_MODEL: ${LLM_MODEL:-openai/gpt-6-luna}
     ports:
       - "8010:8010"   # 端末からの WebSocket（LAN 内のみ）
       - "127.0.0.1:8011:8011"   # 操作 API（/sessions、/say）。この Mac からだけ使う
     volumes:
       - ./data/brain:/data
+      - ./evals:/evals:ro
     depends_on:
       xiaozhi-server:
         condition: service_healthy

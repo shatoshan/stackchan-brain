@@ -12,6 +12,7 @@ import logging
 import os
 import time
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -58,6 +59,10 @@ class Session:
     last_user_at: float = 0.0      # 最後にユーザー発話（stt）が届いた時刻
     last_robot_end_at: float = 0.0  # 最後に tts stop が届いた時刻
     injections: int = 0
+    last_injection_at: float = 0.0
+    # 直近の会話（role, text, t）。ロボットの発話は tts start〜stop の文をまとめて 1 件にする
+    transcript: deque = field(default_factory=lambda: deque(maxlen=20))
+    _robot_buf: list = field(default_factory=list)
     # 差し込んだ文の stt は端末に流さない（画面に「ユーザー発話」として出るのを防ぐ）
     suppress_stt: set = field(default_factory=set)
 
@@ -69,6 +74,7 @@ class Session:
             "since_user_s": round(now - self.last_user_at) if self.last_user_at else None,
             "since_robot_s": round(now - self.last_robot_end_at) if self.last_robot_end_at else None,
             "injections": self.injections,
+            "since_injection_s": round(now - self.last_injection_at) if self.last_injection_at else None,
         }
 
 
@@ -125,11 +131,18 @@ class Relay:
         elif direction == "down" and mtype == "tts":
             if state == "start":
                 session.state = "speaking"
+                session._robot_buf = []
+            elif state == "sentence_start" and data.get("text"):
+                session._robot_buf.append(data["text"])
             elif state == "stop":
                 session.state = "listening"
                 session.last_robot_end_at = now
+                if session._robot_buf:
+                    session.transcript.append(("robot", "、".join(session._robot_buf), now))
+                    session._robot_buf = []
         elif direction == "down" and mtype == "stt" and not str(data.get("text", "")).startswith("% "):
             session.last_user_at = now
+            session.transcript.append(("user", str(data.get("text", "")), now))
 
     async def inject(self, text: str, mode: str = "verbatim", device_id: str | None = None) -> dict:
         """聞き取り中のセッションに発話を差し込む。
@@ -162,9 +175,16 @@ class Relay:
         msg = {"session_id": session.session_id, "type": "listen", "state": "detect", "text": payload_text}
         await session.upstream_ws.send_str(json.dumps(msg, ensure_ascii=False))
         session.injections += 1
+        session.last_injection_at = now
         self._record(session, "inject", {"mode": mode, "text": text})
         log.info("[%s] inject(%s): %s", session.device_id, mode, text)
         return session.info()
+
+    async def send_emotion(self, session: Session, emotion: str) -> None:
+        """端末の表情を変える（xiaozhi-server が送る {"type":"llm","emotion"} と同じ形）。"""
+        msg = {"type": "llm", "emotion": emotion, "session_id": session.session_id}
+        await session.device_ws.send_str(json.dumps(msg))
+        self._record(session, "brain-down", msg)
 
     async def _pump(self, session: Session, source, sink, direction: str) -> str:
         """source から sink へ流し続け、source 側が閉じたら direction を返す。"""

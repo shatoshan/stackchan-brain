@@ -1,7 +1,7 @@
 ---
 type: Service
 title: brain（端末 ⇔ xiaozhi-server の WebSocket 中継と自律発話）
-description: 端末の WebSocket セッションを xiaozhi-server へ中継して会話を記録し、操作 API から発話を差し込む。M3 の判定ループの土台。
+description: 端末の WebSocket セッションを xiaozhi-server へ中継して会話を記録し、判定ループ（Jev）と操作 API から発話を差し込む。
 tags: [service, brain, relay, websocket]
 status: stable
 generated: { by: claude-code/opus-5.5, at: 2026-09-26T11:21:01Z }
@@ -23,7 +23,7 @@ sources:
 # 役割
 
 - [決定 007](/decisions/007-proactive-speech-path.md) の案 A。xiaozhi-server の `server.websocket` を brain（`ws://<LAN IP>:8010/xiaozhi/v1/`）に向けると、端末は OTA 経由で brain に繋ぎ、brain が `ws://xiaozhi-server:8000/xiaozhi/v1/` へ中継する。[^code]
-- ステップ1で透過中継と記録、ステップ2で発話の差し込み（操作 API）を実装。判定ループは次のステップ。
+- ステップ1で透過中継と記録、ステップ2で発話の差し込み（操作 API）、ステップ3で判定ループ（`brain/judge.py`）を実装。
 
 # 動作
 
@@ -49,6 +49,15 @@ curl -s 127.0.0.1:8011/sessions
 curl -s -X POST 127.0.0.1:8011/say -d '{"text":"ねえねえ、今日はいい天気だね。"}'
 curl -s -X POST 127.0.0.1:8011/say -d '{"mode":"llm","text":"（ロボットから話しかける場面です。…を短く聞いてください）"}'
 ```
+
+# 判定ループ（`brain/judge.py`）
+
+- 5 秒ごとに中継中のセッションを見て、ルールで絞ってから Jev（`/v1/evaluate`、llm-proxy 経由なので brain はキーを持たない）に判定させ、話すなら表情を送ってから `/say` と同じ処理で差し込む。質問と閾値は [直感層の質問設計](/design/jev-questions.md)。
+- Jev が 429 / エラーなら 60 秒から最大 10 分まで倍々で Jev を止め、その間は LLM（`LLM_MODEL`）に同じ分類を JSON で答えさせる。LLM 判定は 1 台あたり 30 秒に 1 回まで。
+- 判定はすべて `data/brain/judgments/YYYYMMDD.jsonl` に記録（状態ブロブ、閾値、答え、Jev の生の確率、行動）。evals の素材にする。
+- 機嫌（0〜1、初期 0.6）は、自発発話に返事があれば +0.1、なければ −0.1。
+- 表情は判定結果を `{"type":"llm","emotion":...}` として brain から端末へ直接送る。
+- `BRAIN_JUDGE_ENABLED=0` で止められる。閾値・間隔などは `BRAIN_*` 環境変数（`judge.py` 冒頭）。
 
 # 実測（2026-09-26）
 
