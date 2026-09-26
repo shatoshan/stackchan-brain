@@ -1,6 +1,9 @@
 # Update Log
 
 ## 2026-09-26
+* **Update**: 中国向けのデフォルト設定を整理。サーバープラグインを `functions: []`、`wakeup_words` を `HiStackChan` ほか、ウェイクワード応答キャッシュ無効、`exit_commands` を日本語に。詳細と落とし穴は [xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md)「日本語で使う際の落とし穴」。
+* **Finding**: 本体が中国語の few-shot と「嘿，你好呀」を LLM に渡すため、Luna がウェイクワードに 5 回中 3 回中国語で返答。[llm-proxy](/services/llm-proxy.md) に完全一致の日本語置換を追加し 5/5 日本語に。
+* **Update**: [公式ファーム](/firmware/official-firmware.md) にウェイクワード（`wn9_histackchan_tts3`、`Hi,Stack Chan`）を追記。[GPT-6 Luna](/external/openai-gpt-6-luna.md) に function calling の実測を追記。
 * **Milestone**: M1 達成。有料クレジット投入後、疑似デバイス → xiaozhi-server → llm-proxy → Gateway → GPT-6 Luna で日本語の一往復（「こんにちは。また会えてうれしいよ」、約 3 秒）。[GPT-6 Luna](/external/openai-gpt-6-luna.md) を `stable` に。
 * **Update**: 実キーで疎通。[GPT-6 Luna](/external/openai-gpt-6-luna.md) は Vercel 無料枠で 403（有料クレジットが必要）。[Jev](/external/jev.md) は無料枠で 200（確率 0.59、約 160ms）。[Vercel AI Gateway](/external/vercel-ai-gateway.md) に無料枠の制限を追記。
 * **Decision**: [決定 008](/decisions/008-llm-via-vercel-gateway.md)。ユーザー指示によりランタイム LLM を GPT-6 Luna（`openai/gpt-6-luna`）に変更し、LLM と Jev を Vercel AI Gateway の 1 本のキーに統一。

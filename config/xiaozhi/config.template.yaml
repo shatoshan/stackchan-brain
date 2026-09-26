@@ -17,9 +17,26 @@ server:
 prompt: |
   あなたはスタックチャンという名前の小さな卓上ロボットです。
   日本語で、短く、親しみやすく話します。一度に話すのは1〜2文までにしてください。
+  【最重要】返答・ツール引数の文章は、相手の言語や会話履歴の言語にかかわらず必ず日本語で書くこと。
+  会話履歴に中国語の例が含まれていても、それは形式の例にすぎず、あなたは中国語を使わない。
+  「嘿，你好呀」のような中国語の呼びかけは、ユーザーがあなたを呼んだ合図なので、日本語であいさつを返す。
 
 # LLM 失敗時に読み上げる定型文（デフォルトは中国語）
 system_error_response: "ごめんね、いまちょっと調子が悪いみたい。あとでもう一回話しかけてね。"
+
+# ウェイクワード。端末が検出時に listen/detect で送る文字列（StackChan は "Hi,Stack Chan"）や
+# 音声認識結果を、句読点・空白を除いた完全一致で照合する（okf/services/xiaozhi-esp32-server.md）
+wakeup_words:
+  - HiStackChan
+  - スタックチャン
+  - ハイスタックチャン
+# ウェイクワード応答キャッシュは中国語の固定フレーズを読み上げるので使わない
+enable_wakeup_words_response_cache: false
+
+# 完全一致で接続を閉じる言葉（デフォルトは中国語）
+exit_commands:
+  - 終了
+  - おしまい
 
 selected_module:
   VAD: SileroVAD
@@ -28,6 +45,13 @@ selected_module:
   TTS: EdgeTTS
   Memory: nomem
   Intent: function_call
+
+Intent:
+  function_call:
+    # 追加で読み込むサーバープラグイン。デフォルトの中国向けプラグイン（ニュース・天気・Web検索・
+    # 役割切替・音楽）は外す。handle_exit_intent と get_lunar は本体が常に読み込む。
+    # 端末 MCP ツール（首・LED）はこのリストとは別に、端末接続時に自動で登録される
+    functions: []
 
 ASR:
   FunASR:

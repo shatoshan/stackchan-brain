@@ -22,6 +22,15 @@ sources:
   - id: fw-cmake
     resource: https://github.com/m5stack/StackChan/blob/1b5765599fba8aaad1811d9a79358ccc7051f5f3/firmware/CMakeLists.txt
     title: StackChan firmware/CMakeLists.txt
+  - id: sdk-defaults
+    resource: https://github.com/m5stack/StackChan/blob/1b5765599fba8aaad1811d9a79358ccc7051f5f3/firmware/sdkconfig.defaults
+    title: StackChan firmware/sdkconfig.defaults
+  - id: esp-sr-model
+    resource: https://github.com/espressif/esp-sr/blob/master/model/wakenet_model/wn9_histackchan_tts3/_MODEL_INFO_
+    title: esp-sr wn9_histackchan_tts3 _MODEL_INFO_（master。StackChan の lock は esp-sr 2.3.1、該当タグは未照合）
+  - id: xz-protocol-224
+    resource: https://github.com/78/xiaozhi-esp32/blob/v2.2.4/main/protocols/protocol.cc
+    title: xiaozhi-esp32 v2.2.4 main/protocols/protocol.cc
   - id: xz-app-224
     resource: https://github.com/78/xiaozhi-esp32/blob/v2.2.4/main/application.cc
     title: 78/xiaozhi-esp32 v2.2.4 main/application.cc
@@ -44,7 +53,16 @@ sources:
 - ASR / LLM / TTS はすべてサーバー側。端末は Opus 音声を WebSocket（または MQTT+UDP）で送受信するだけ。デフォルトの LLM（Qwen）は XiaoZhi クラウド側で動いている。
 - プロトコル選択: OTA 応答に `mqtt` があれば MQTT、`websocket` があれば WebSocket を使う（v2.2.4 `InitializeProtocol`）。[^xz-app-224] 詳細は [XiaoZhi プロトコル](/protocol/xiaozhi-protocol.md)。
 
+# ウェイクワード
+
+- ESP-SR の WakeNet モデル `wn9_histackchan_tts3`（`CONFIG_SR_WN_WN9_HISTACKCHAN_TTS3=y`）。`CONFIG_SEND_WAKE_WORD_DATA=n` なのでウェイクワード音声はサーバーに送らない。[^sdk-defaults]
+- モデル情報は `wakenet9_tts3h12_Hi,Stack Chan_3_0.585_0.590`。検出時、端末は `{"type":"listen","state":"detect","text":"<ウェイクワード>"}` を送る。[^esp-sr-model] [^xz-protocol-224]
+  - 送られる文字列は `Hi,Stack Chan` と推定（モデル情報からの読み取り。実機ログでは未確認）。サーバー側は句読点・空白を除いて `HiStackChan` で照合する。
+
 [^stackchan-readme]: m5stack/StackChan README
+[^sdk-defaults]: StackChan firmware/sdkconfig.defaults
+[^esp-sr-model]: esp-sr wn9_histackchan_tts3 _MODEL_INFO_
+[^xz-protocol-224]: xiaozhi-esp32 v2.2.4 protocol.cc
 [^fw-readme]: StackChan firmware/README.md
 [^repos-json]: StackChan firmware/repos.json
 [^fw-patch]: StackChan firmware/patches/xiaozhi-esp32.patch

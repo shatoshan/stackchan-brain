@@ -3,6 +3,8 @@
 xiaozhi-server の OpenAI プロバイダは reasoning_effort を送れないため、ここで既定値を注入する
 （GPT-6 Luna は Chat Completions で function calling を使うには reasoning_effort: none が必須）。
 Gateway の API キーもここで付与するので、xiaozhi-server の設定にキーを置かなくてよい。
+また、本体が会話履歴に差し込む中国語の固定文言（few-shot 例、ウェイクワード時の呼びかけ）を
+完全一致で日本語に置き換える。これが残るとモデルが中国語で返答することがある。
 根拠: okf/external/openai-gpt-6-luna.md、okf/decisions/008-llm-via-vercel-gateway.md
 """
 
@@ -16,11 +18,52 @@ UPSTREAM = os.environ.get("LLM_PROXY_UPSTREAM", "https://ai-gateway.vercel.sh").
 API_KEY = os.environ["AI_GATEWAY_API_KEY"]
 REASONING_EFFORT = os.environ.get("LLM_REASONING_EFFORT", "none")
 PORT = int(os.environ.get("LLM_PROXY_PORT", "8080"))
+# デバッグ用: 1 ならリクエスト本文（messages / tools）をログに出す。会話内容が残るので常用しない
+LOG_BODY = os.environ.get("LLM_PROXY_LOG_BODY") == "1"
 
 # 上流へそのまま渡さないヘッダ
 HOP_HEADERS = {"host", "authorization", "content-length", "transfer-encoding", "connection", "accept-encoding"}
 
 log = logging.getLogger("llm-proxy")
+
+# xiaozhi-server server_0.9.6 が差し込む中国語の固定文言 → 日本語。完全一致のみ置換する。
+# 出典: core/connection.py _inject_tool_call_fewshot、core/handle/textHandler/listenMessageHandler.py
+REWRITES = {
+    "给我讲个故事吧": "お話を聞かせて",
+    "好呀，你想听什么类型的呀？童话、冒险还是搞笑的？选一个我给你开讲~": "いいよ、どんなお話がいい？昔話、冒険、おもしろい話から選んでね。",
+    "已直接回复": "直接返答しました",
+    "拜拜": "バイバイ",
+    "再见，下次再聊~": "またね、また話そうね。",
+    "退出意图已处理": "終了処理をしました",
+    "嘿，你好呀": "スタックチャン、こんにちは",
+}
+
+
+def rewrite_messages(messages: list) -> int:
+    """messages 内の固定文言を置き換え、置き換えた件数を返す。"""
+    count = 0
+    for msg in messages:
+        content = msg.get("content")
+        if isinstance(content, str) and content in REWRITES:
+            msg["content"] = REWRITES[content]
+            count += 1
+        for call in msg.get("tool_calls") or []:
+            fn = call.get("function") or {}
+            try:
+                args = json.loads(fn.get("arguments") or "{}")
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(args, dict):
+                continue
+            changed = False
+            for key, value in args.items():
+                if isinstance(value, str) and value in REWRITES:
+                    args[key] = REWRITES[value]
+                    changed = True
+            if changed:
+                fn["arguments"] = json.dumps(args, ensure_ascii=False)
+                count += 1
+    return count
 
 
 async def handle(request: web.Request) -> web.StreamResponse:
@@ -30,9 +73,12 @@ async def handle(request: web.Request) -> web.StreamResponse:
         # 呼び出し側が明示した値は尊重する
         if "reasoning_effort" not in payload and "reasoning" not in payload:
             payload["reasoning_effort"] = REASONING_EFFORT
-        log.info("chat.completions model=%s reasoning_effort=%s tools=%d stream=%s",
+        rewritten = rewrite_messages(payload.get("messages") or [])
+        log.info("chat.completions model=%s reasoning_effort=%s tools=%d stream=%s rewritten=%d",
                  payload.get("model"), payload.get("reasoning_effort"),
-                 len(payload.get("tools") or []), payload.get("stream"))
+                 len(payload.get("tools") or []), payload.get("stream"), rewritten)
+        if LOG_BODY:
+            log.info("request body: %s", json.dumps(payload, ensure_ascii=False))
         body = json.dumps(payload).encode()
 
     headers = {k: v for k, v in request.headers.items() if k.lower() not in HOP_HEADERS}

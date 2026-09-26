@@ -45,6 +45,7 @@ services:
     environment:
       AI_GATEWAY_API_KEY: ${AI_GATEWAY_API_KEY:?AI_GATEWAY_API_KEY を .env に設定してください}
       LLM_REASONING_EFFORT: ${LLM_REASONING_EFFORT:-none}
+      LLM_PROXY_LOG_BODY: ${LLM_PROXY_LOG_BODY:-0}
     volumes:
       - ./llm-proxy/proxy.py:/opt/llm-proxy/proxy.py:ro
     # ポートは公開しない（compose ネットワーク内の xiaozhi-server からだけ使う）

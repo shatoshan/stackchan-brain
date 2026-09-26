@@ -43,6 +43,24 @@ sources:
   - id: prompt-mgr
     resource: https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/788f530/main/xiaozhi-server/core/utils/prompt_manager.py
     title: core/utils/prompt_manager.py（server_0.9.6 イメージ内で確認）
+  - id: plugin-exec
+    resource: https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/788f530/main/xiaozhi-server/core/providers/tools/server_plugins/plugin_executor.py
+    title: core/providers/tools/server_plugins/plugin_executor.py
+  - id: hello
+    resource: https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/788f530/main/xiaozhi-server/core/handle/helloHandle.py
+    title: core/handle/helloHandle.py
+  - id: intent
+    resource: https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/788f530/main/xiaozhi-server/core/handle/intentHandler.py
+    title: core/handle/intentHandler.py
+  - id: conn
+    resource: https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/788f530/main/xiaozhi-server/core/connection.py
+    title: core/connection.py
+  - id: tool-handler
+    resource: https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/788f530/main/xiaozhi-server/core/providers/tools/unified_tool_handler.py
+    title: core/providers/tools/unified_tool_handler.py
+  - id: run-0926b
+    resource: process:claude-code-session-2026-09-26
+    title: 2026-09-26 プラグイン・ウェイクワード整理後の疑似デバイス試験
   - id: ctx
     resource: https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/788f530/docs/context-provider-integration.md
     title: docs/context-provider-integration.md
@@ -142,6 +160,29 @@ TTS:
 - 上記以外のパラメータ（`reasoning_effort` など）を送る設定は無い。`extra_body` は `THINKING_DISABLED_DOMAINS`（aliyuncs.com、deepseek.com 等）に一致するドメインの思考無効化にしか使われない。[^openai-llm]
 - `selected_module.LLM` に新しいキー名（本リポジトリでは `GatewayLLM`）を指定し、`LLM:` 配下に同名で定義すれば既存定義と干渉しない。現在は [llm-proxy](/services/llm-proxy.md) 経由で [GPT-6 Luna](/external/openai-gpt-6-luna.md) を呼んでいる。
 
+# 日本語で使う際の落とし穴（2026-09-26 確認）
+
+## サーバープラグイン
+- `handle_exit_intent` と `get_lunar` は本体が常に読み込む（`necessary_functions`）。それ以外は `Intent.function_call.functions` のリストで決まる。[^plugin-exec]
+- デフォルトの `functions` は `change_role`、`web_search`（秘塔のキーがプレースホルダ）、`get_weather`（中国の QWeather 共有キー、既定地点は広州）、`get_news_from_newsnow`（中国ニュース）、`play_music`。本リポジトリでは `functions: []` にして全部外した。リストは deep merge されず丸ごと置き換わる。[^config] [^loader]
+- 端末 MCP ツール（首・LED）はこのリストとは別で、端末接続時に登録される。
+
+## ウェイクワード
+- `wakeup_words` は **句読点と空白を除いた完全一致** で照合される（`remove_punctuation_and_length`）。StackChan 端末は検出時に `Hi,Stack Chan` を送るので、`HiStackChan` を登録する（→ [公式ファーム](/firmware/official-firmware.md)）。[^intent]
+- 一致すると、`enable_greeting: true` なら本体が **固定の中国語「嘿，你好呀」をユーザー発話として LLM に渡す**（ハードコード）。
+  - 同じ文言を `stt` として端末にも送るので、**端末画面のユーザー発話欄に中国語が表示される**（2026-09-26 疑似デバイスで確認）。サーバー→端末の経路なので llm-proxy では直せない。[決定 007](/decisions/007-proactive-speech-path.md) の WebSocket 中継を入れるなら、そこで書き換えられる。[^run-0926b]
+- `enable_wakeup_words_response_cache: true`（デフォルト）だと、中国語の固定フレーズ（「我在这里哦！」等）を TTS したキャッシュ音声を返す。日本語の音声では意味をなさないので `false` にした。[^hello]
+
+## 中国語の few-shot 注入
+- Intent が `function_call` でツールが1つでもあると、本体が毎回、会話履歴に中国語の例示会話（「给我讲个故事吧」「拜拜」「再见，下次再聊~」等）を差し込む（`_inject_tool_call_fewshot`、設定で無効化不可）。[^conn]
+- `handle_exit_intent` は常に読み込まれるので、function calling を使う限り必ず注入される。
+- 影響: GPT-6 Luna はウェイクワード時の「嘿，你好呀」に対して、キャラ設定で日本語を強く指示しても 5 回中 3 回中国語で返答した。[^run-0926b]
+- 対処: [llm-proxy](/services/llm-proxy.md) で既知の固定文言だけを日本語に置換。置換後は 5 回中 5 回日本語。[^run-0926b]
+
+## その他
+- `exit_commands` も句読点・空白除去後の完全一致。一致すると接続を閉じる。デフォルトは中国語（退出・关闭）。[^intent]
+- ツール実行時、本体は `{"type":"stt","text":"% <関数名>"}` を端末に送る（画面表示用で、読み上げはされない）。端末では「ユーザー発話」欄に表示される。[^tool-handler]
+
 # OTA エンドポイント（§9 未確認事項 → 確認済み）
 
 - **提供している。** 最小構成（`read_config_from_api` が偽）の時だけ、HTTP サーバーが `GET/POST /xiaozhi/ota/` と `/xiaozhi/ota/download/{filename}` を追加する。[^http-server]
@@ -165,4 +206,10 @@ TTS:
 [^ci]: .github/workflows/docker-image.yml
 [^ghcr]: GHCR image index
 [^ctx]: docs/context-provider-integration.md
+[^plugin-exec]: plugin_executor.py
+[^hello]: helloHandle.py
+[^intent]: intentHandler.py
+[^conn]: connection.py
+[^tool-handler]: unified_tool_handler.py
+[^run-0926b]: 2026-09-26 疑似デバイス試験
 [^prompt-mgr]: core/utils/prompt_manager.py

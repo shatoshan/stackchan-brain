@@ -46,6 +46,10 @@ async def run(url: str, text: str, device_id: str, timeout: float) -> int:
             except asyncio.TimeoutError:
                 print(f"!! {timeout}s 応答なし、終了")
                 return 1
+            except websockets.ConnectionClosed as e:
+                # exit_commands 等でサーバーが接続を閉じた
+                print(f"== サーバーが接続を閉じた (code={e.rcvd.code if e.rcvd else None})")
+                return 0
             if isinstance(msg, bytes):
                 frames += 1
                 continue
