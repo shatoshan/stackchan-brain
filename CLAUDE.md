@@ -47,6 +47,8 @@ curl http://<LAN IP>:8003/xiaozhi/ota/                                   # OTA �
 docker compose exec -T xiaozhi-server python - --url ws://brain:8010/xiaozhi/v1/ "こんにちは" < sim/text_client.py   # 実機と同じ経路で一往復
 curl -s 127.0.0.1:8011/sessions       # brain の中継中セッション（/say で発話を差し込める）
 docker compose exec -T brain python /evals/run.py   # 直感層の回帰テスト（--llm-only で Jev を使わない）
+python3 evals/label.py                # 実機の判定にラベルを付けて evals を増やす（結果はローカルのみ）
+python3 scripts/check_upstream_strings.py   # xiaozhi-server のイメージを上げたら必ず実行（llm-proxy の置換対象の検査）
 docker compose down
 ```
 

@@ -176,7 +176,17 @@ class Judge:
         if self.client:
             await self.client.close()
 
-    def _record(self, entry: dict) -> None:
+    def _record(self, entry: dict, session: Session | None = None) -> None:
+        """判定を記録する。カメラの確認結果が新しければ、その時の写真も保存する（evals/label.py でラベル付けする素材）。"""
+        entry["id"] = f"{time.strftime('%Y%m%d-%H%M%S')}-{entry.get('session', 'x')}-{int(time.time() * 1000) % 1000:03d}"
+        if session and session.presence and time.time() - session.presence.get("checked_at", 0) <= PRESENCE_FRESH:
+            src = Path(os.environ.get("BRAIN_CAMERA_DIR", "/data/camera")) / "last.jpg"
+            if src.exists():
+                img_dir = self.record_dir / "images"
+                img_dir.mkdir(exist_ok=True)
+                dst = img_dir / f"{entry['id']}.jpg"
+                dst.write_bytes(src.read_bytes())
+                entry["image"] = f"images/{dst.name}"
         path = self.record_dir / time.strftime("%Y%m%d.jsonl")
         with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -344,7 +354,7 @@ class Judge:
         self._record({"t": round(time.time(), 3), "device_id": session.device_id, "session": session.id,
                       "source": source, "latency_s": latency, "state": state, "threshold": round(threshold, 2),
                       "answers": {k: v for k, v in ans.items() if k != "raw"}, "raw": ans.get("raw"),
-                      "action": action})
+                      "action": action}, session)
 
     async def _safe_head(self, session: Session, yaw: int, pitch: int, speed: int) -> None:
         try:

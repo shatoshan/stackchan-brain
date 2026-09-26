@@ -2,6 +2,7 @@
 
     docker compose exec -T brain python /evals/run.py            # Jev と LLM の両方
     docker compose exec -T brain python /evals/run.py --llm-only # Jev が混んでいる時
+    docker compose exec -T brain python /evals/run.py --cases /data/evals/labeled.jsonl  # 実機からラベル付けしたセット（ローカル）
 
 cases.jsonl の 1 行: {"id", "expect_speak": bool, "note", "state": 状態ブロブ}
 閾値は mood と proactive_utterances_this_session から judge と同じ式で出す。
@@ -16,8 +17,8 @@ from judge import BASE_THRESHOLD, Judge  # noqa: E402
 from aiohttp import ClientSession, ClientTimeout  # noqa: E402
 
 
-async def main(llm_only: bool) -> int:
-    cases = [json.loads(l) for l in open("/evals/cases.jsonl") if l.strip()]
+async def main(llm_only: bool, cases_path: str) -> int:
+    cases = [json.loads(l) for l in open(cases_path) if l.strip()]
     judge = Judge(relay=None, record_dir=None)
     judge.client = ClientSession(timeout=ClientTimeout(total=30))
     failures = 0
@@ -53,4 +54,6 @@ async def main(llm_only: bool) -> int:
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--llm-only", action="store_true")
-    raise SystemExit(asyncio.run(main(p.parse_args().llm_only)))
+    p.add_argument("--cases", default="/evals/cases.jsonl")
+    a = p.parse_args()
+    raise SystemExit(asyncio.run(main(a.llm_only, a.cases)))

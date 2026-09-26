@@ -49,6 +49,7 @@ services:
       LLM_PROXY_LOG_BODY: ${LLM_PROXY_LOG_BODY:-0}
     volumes:
       - ./llm-proxy/proxy.py:/opt/llm-proxy/proxy.py:ro
+      - ./llm-proxy/rewrites.py:/opt/llm-proxy/rewrites.py:ro
     # ポートは公開しない（compose ネットワーク内の xiaozhi-server からだけ使う）
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]

@@ -133,6 +133,8 @@ sources:
 
 ## ASR（FunASR ローカル）
 
+- **ローカル必須**（クラウド ASR に替えない）。セッション中はマイク音声が常時流れるため。理由は [決定 003](/decisions/003-lan-only.md)。
+
 ```yaml
 ASR:
   FunASR:

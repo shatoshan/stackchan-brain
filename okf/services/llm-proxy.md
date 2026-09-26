@@ -30,6 +30,7 @@ sources:
 - 本体が会話履歴に差し込む中国語の固定文言（few-shot 例、ウェイクワード時の「嘿，你好呀」）を、`REWRITES` 表に従って **完全一致で** 日本語に置き換える。対象は `messages[].content` と `tool_calls[].function.arguments` 内の文字列値。理由は [xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md) の「中国語の few-shot 注入」。[^code]
   - 文中に埋め込まれる固定指示は部分置換（`SUBSTRING_REWRITES`）。VLLM が画像説明の質問に付ける「(请使用中文回复)」を日本語の指示に置き換える。画像付きメッセージ（content が配列）の文章部分も対象。
   - 本体の文言が変わると一致しなくなり、置換されないだけ（壊れはしない）。イメージを上げたら `rewritten=` のログ件数で確認する。server_0.9.6 では 1 リクエストあたり 8 件。
+- **壊れやすさへのガード**: 置換表は `llm-proxy/rewrites.py`（出典ファイル付き）。xiaozhi-server のイメージを上げたら `python3 scripts/check_upstream_strings.py` で、置換対象の文言がイメージ内にまだあるか検査する（無ければ終了コード 1）。実行中も、tools 付きリクエストで few-shot が 5 回連続で見当たらない、few-shot があるのに 1 件も置換されない、画像説明に日本語指示が入っていない、のいずれかで `UPSTREAM CHANGED?` 警告をログに出す（各 1 回）。セッション最初の 1 往復は few-shot が入らないことがあるので、単発では警告しない。
 - `LLM_PROXY_LOG_BODY=1` でリクエスト本文をログに出す（デバッグ用。会話内容が残るので常用しない）。
 - `GET /healthz` はヘルスチェック用。ポートはホストに公開しない（compose ネットワーク内の `http://llm-proxy:8080/v1`）。
 - 追加ビルドを避けるため、aiohttp を同梱している xiaozhi-server イメージで `python /opt/llm-proxy/proxy.py` を実行している。

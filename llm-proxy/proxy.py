@@ -14,6 +14,8 @@ import os
 
 from aiohttp import ClientSession, ClientTimeout, web
 
+from rewrites import FEWSHOT_ID_PREFIX, REWRITES, SUBSTRING_REWRITES
+
 UPSTREAM = os.environ.get("LLM_PROXY_UPSTREAM", "https://ai-gateway.vercel.sh").rstrip("/")
 API_KEY = os.environ["AI_GATEWAY_API_KEY"]
 REASONING_EFFORT = os.environ.get("LLM_REASONING_EFFORT", "none")
@@ -26,24 +28,8 @@ HOP_HEADERS = {"host", "authorization", "content-length", "transfer-encoding", "
 
 log = logging.getLogger("llm-proxy")
 
-# xiaozhi-server server_0.9.6 が差し込む中国語の固定文言 → 日本語。完全一致のみ置換する。
-# 出典: core/connection.py _inject_tool_call_fewshot、core/handle/textHandler/listenMessageHandler.py
-REWRITES = {
-    "给我讲个故事吧": "お話を聞かせて",
-    "好呀，你想听什么类型的呀？童话、冒险还是搞笑的？选一个我给你开讲~": "いいよ、どんなお話がいい？昔話、冒険、おもしろい話から選んでね。",
-    "已直接回复": "直接返答しました",
-    "拜拜": "バイバイ",
-    "再见，下次再聊~": "またね、また話そうね。",
-    "退出意图已处理": "終了処理をしました",
-    "嘿，你好呀": "スタックチャン、こんにちは",
-}
 
 
-# 文中に埋め込まれる中国語の固定指示 → 日本語（部分置換）。
-# 出典: core/providers/vllm/openai.py（画像説明の質問末尾に「(请使用中文回复)」を固定で付ける。結果はそのまま読み上げられる）
-SUBSTRING_REWRITES = {
-    "(请使用中文回复)": "（日本語で、1〜2文の短い話し言葉で答えてください）",
-}
 
 
 def _rewrite_text(text: str) -> tuple[str, bool]:
@@ -55,6 +41,39 @@ def _rewrite_text(text: str) -> tuple[str, bool]:
             text = text.replace(old, new)
             changed = True
     return text, changed
+
+
+_warned: set = set()
+_fewshot_missing_streak = 0
+
+
+def _warn_once(key: str, message: str) -> None:
+    if key not in _warned:
+        _warned.add(key)
+        log.warning("UPSTREAM CHANGED? %s（xiaozhi-server の文言が変わった可能性。scripts/check_upstream_strings.py を実行）", message)
+
+
+def check_expected_strings(payload: dict, rewritten: int) -> None:
+    """置換が効くはずのリクエストで効いていなければ警告する（イメージ更新で文言が変わると静かに壊れるため）。"""
+    messages = payload.get("messages") or []
+    global _fewshot_missing_streak
+    if payload.get("tools"):
+        ids = [c.get("id", "") for m in messages for c in (m.get("tool_calls") or [])]
+        # セッション最初の 1 往復は few-shot が入らないことがあるので、連続で見当たらない時だけ警告する
+        if not any(i.startswith(FEWSHOT_ID_PREFIX) for i in ids):
+            _fewshot_missing_streak += 1
+            if _fewshot_missing_streak >= 5:
+                _warn_once("fewshot-missing", "tools 付きのリクエストで few-shot（id が fewshot_ で始まる tool_call）が 5 回連続で見当たらない")
+            return
+        _fewshot_missing_streak = 0
+        if rewritten == 0:
+            _warn_once("fewshot-not-rewritten", "few-shot はあるが中国語の固定文言が 1 件も置換されなかった")
+    for m in messages:
+        content = m.get("content")
+        if isinstance(content, list) and any(isinstance(p, dict) and p.get("type") == "image_url" for p in content):
+            texts = " ".join(p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text")
+            if not any(new in texts for new in SUBSTRING_REWRITES.values()):
+                _warn_once("vllm-suffix-missing", "画像説明のリクエストに日本語指示が入っていない（中国語指示の置換が効いていない）")
 
 
 def rewrite_messages(messages: list) -> int:
@@ -98,6 +117,7 @@ async def handle(request: web.Request) -> web.StreamResponse:
         if "reasoning_effort" not in payload and "reasoning" not in payload:
             payload["reasoning_effort"] = REASONING_EFFORT
         rewritten = rewrite_messages(payload.get("messages") or [])
+        check_expected_strings(payload, rewritten)
         log.info("chat.completions model=%s reasoning_effort=%s tools=%d stream=%s rewritten=%d",
                  payload.get("model"), payload.get("reasoning_effort"),
                  len(payload.get("tools") or []), payload.get("stream"), rewritten)

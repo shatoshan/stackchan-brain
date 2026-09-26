@@ -64,6 +64,9 @@ sources:
 
 # 評価
 
+- 実機の判定はすべて `data/brain/judgments/YYYYMMDD.jsonl` に ID 付きで記録され、カメラの確認結果が新しければその時の写真も `images/` に保存される。`python3 evals/label.py`（`--open` で写真表示）で「話す / 黙る」のラベルを付けると `data/brain/evals/labeled.jsonl` に貯まり、`run.py --cases /data/evals/labeled.jsonl` で流せる。実際の会話と写真を含むのでローカルのみ（公開リポジトリには入れない）。
+- 同じセッションで状況と直近の会話が前回と同じ判定は、ラベル付けの時に間引く。
+
 - `evals/cases.jsonl` に状態ブロブと期待（話す / 黙る）を貯め、`docker compose exec -T brain python /evals/run.py` で現行ロジックを流す。[^evals]
 - 2026-09-26 時点: 8 ケース（カメラ 2 件を含む）、LLM 判定で全問正解。Jev は 429 でほぼ未評価。
 

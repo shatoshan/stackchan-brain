@@ -1,5 +1,11 @@
 # Update Log
 
+## 2026-09-27
+* **Update**: [決定 003](/decisions/003-lan-only.md) と [xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md) に「ASR はローカル必須（セッション中はマイク音声が常時流れるため）」と、認識テキストは LLM 経由でクラウドに出ることを追記。
+* **Update**: [llm-proxy](/services/llm-proxy.md) に置換対象の検査スクリプトと実行時の警告を追加（イメージ更新で中国語文言が変わると静かに壊れるため）。
+* **Decision**: [決定 011](/decisions/011-usb-powered.md)。常時稼働は USB 給電前提、バッテリー・発熱は評価しない。
+* **Update**: 実機の判定を写真付きで貯め、`evals/label.py` でラベル付けして evals にする仕組み。[直感層の質問設計](/design/jev-questions.md)。
+
 ## 2026-09-26
 * **Decision**: [決定 010](/decisions/010-firmware-silent-shutter.md)。原則2に `firmware-patches/` の最小パッチの例外を設け（human:shingo）、撮影時のシャッター音を消すパッチを当てて書き込み。CLAUDE.md、[ファーム書き込み](/runbooks/firmware-flash.md)、[カメラで在席を知る](/design/camera-presence.md) を更新。
 * **Update**: 撮影のたびに端末がシャッター音を鳴らす（ファーム固定）ため、会話中は撮らず、沈黙 30 秒以降と相手が離れた後だけ撮るように。`person_arrived` の話しかけは LLM 経由に（定型文だと戻ってきた文脈が履歴に残らない）。首の向きの符号は正しいことを確認。[カメラで在席を知る](/design/camera-presence.md)
