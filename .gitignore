@@ -1,0 +1,16 @@
+# 秘密情報
+.env
+
+# xiaozhi-server の実行時データ（生成された .config.yaml に API キーが入る）
+data/
+
+# ASR モデル（約 900MB、runbook の手順で取得）
+models/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# macOS
+.DS_Store

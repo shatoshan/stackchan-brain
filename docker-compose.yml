@@ -1,0 +1,59 @@
+# stackchan-brain
+# xiaozhi-server + llm-proxy。brain / mcp-bridge は M3 / M4 で追加する。
+# LLM・Jev はすべて Vercel AI Gateway 経由（okf/decisions/008-llm-via-vercel-gateway.md）。
+# 設定の根拠: okf/services/xiaozhi-esp32-server.md、手順: okf/runbooks/server-startup.md
+
+services:
+  xiaozhi-server:
+    # 本体は改変せず公式イメージに依存する（CLAUDE.md 原則1）。arm64 / amd64 両対応
+    image: ghcr.io/xinnan-tech/xiaozhi-esp32-server:server_0.9.6
+    container_name: xiaozhi-esp32-server
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      TZ: Asia/Tokyo
+      SERVER_LAN_IP: ${SERVER_LAN_IP:?SERVER_LAN_IP を .env に設定してください}
+      LLM_MODEL: ${LLM_MODEL:-openai/gpt-6-luna}
+    depends_on:
+      llm-proxy:
+        condition: service_healthy
+    # .env の値でテンプレートを展開してから本体を起動する
+    command: ["sh", "-c", "python /opt/stackchan/render_config.py && exec python app.py"]
+    ports:
+      - "8000:8000"   # WebSocket /xiaozhi/v1/
+      - "8003:8003"   # HTTP: OTA /xiaozhi/ota/、視覚解析
+    volumes:
+      - ./config/xiaozhi/config.template.yaml:/opt/stackchan/config.template.yaml:ro
+      - ./config/xiaozhi/render_config.py:/opt/stackchan/render_config.py:ro
+      - ./data/xiaozhi:/opt/xiaozhi-esp32-server/data
+      - ./models/SenseVoiceSmall/model.pt:/opt/xiaozhi-esp32-server/models/SenseVoiceSmall/model.pt:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/xiaozhi/ota/', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+
+  llm-proxy:
+    # reasoning_effort の注入と Gateway キーの付与だけを行う中継（llm-proxy/proxy.py）。
+    # 追加ビルドを避けるため aiohttp 同梱の xiaozhi-server イメージで実行する
+    image: ghcr.io/xinnan-tech/xiaozhi-esp32-server:server_0.9.6
+    container_name: llm-proxy
+    restart: unless-stopped
+    entrypoint: ["python", "/opt/llm-proxy/proxy.py"]
+    environment:
+      AI_GATEWAY_API_KEY: ${AI_GATEWAY_API_KEY:?AI_GATEWAY_API_KEY を .env に設定してください}
+      LLM_REASONING_EFFORT: ${LLM_REASONING_EFFORT:-none}
+    volumes:
+      - ./llm-proxy/proxy.py:/opt/llm-proxy/proxy.py:ro
+    # ポートは公開しない（compose ネットワーク内の xiaozhi-server からだけ使う）
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  # brain:        # M3: Jev 判定ループ + LLM 発話生成（brain/）
+  # mcp-bridge:   # M4: option-quants 等を MCP 接続点に繋ぐ（mcp/）

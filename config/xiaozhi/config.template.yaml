@@ -1,0 +1,56 @@
+# xiaozhi-esp32-server 用の上書き設定テンプレート（最小構成）。
+# 起動時に render_config.py が「${大文字の変数名}」を .env の値で展開し data/.config.yaml を生成する。
+# 本体の config.yaml に deep merge されるので、変えたいキーだけ書く。
+# キー名の根拠: okf/services/xiaozhi-esp32-server.md
+
+server:
+  ip: 0.0.0.0
+  port: 8000
+  http_port: 8003
+  # OTA が端末に返す WebSocket URL。Docker 内からは LAN IP が分からないので明示する
+  websocket: ws://${SERVER_LAN_IP}:8000/xiaozhi/v1/
+  vision_explain: http://${SERVER_LAN_IP}:8003/mcp/vision/explain
+  timezone_offset: +9
+  auth:
+    enabled: false
+
+prompt: |
+  あなたはスタックチャンという名前の小さな卓上ロボットです。
+  日本語で、短く、親しみやすく話します。一度に話すのは1〜2文までにしてください。
+
+# LLM 失敗時に読み上げる定型文（デフォルトは中国語）
+system_error_response: "ごめんね、いまちょっと調子が悪いみたい。あとでもう一回話しかけてね。"
+
+selected_module:
+  VAD: SileroVAD
+  ASR: FunASR
+  LLM: GatewayLLM
+  TTS: EdgeTTS
+  Memory: nomem
+  Intent: function_call
+
+ASR:
+  FunASR:
+    type: fun_local
+    model_dir: models/SenseVoiceSmall
+    output_dir: tmp/
+    language: ja
+
+LLM:
+  GatewayLLM:
+    # Vercel AI Gateway の OpenAI 互換 API を llm-proxy 経由で呼ぶ（okf/external/vercel-ai-gateway.md）
+    # 実キーは llm-proxy が付与するので、ここの api_key はダミー
+    type: openai
+    base_url: http://llm-proxy:8080/v1
+    model_name: ${LLM_MODEL}
+    api_key: via-llm-proxy
+    # temperature / top_p は推論モデルでの扱いが未確認のため指定しない
+    max_tokens: 300
+
+TTS:
+  EdgeTTS:
+    type: edge
+    voice: ja-JP-NanamiNeural
+    output_dir: tmp/
+    # {{language}} としてシステムプロンプトに入り、応答言語を指示する
+    language: Japanese (日本語)
