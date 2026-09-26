@@ -259,7 +259,9 @@ class Judge:
             if r.status != 200:
                 raise RuntimeError(f"llm {r.status}: {(await r.text())[:200]}")
             data = await r.json()
-        a = json.loads(data["choices"][0]["message"]["content"])
+        # LLM は JSON の後ろに余計な文字列を付けることがあるので、先頭の JSON オブジェクトだけ読む
+        text = data["choices"][0]["message"]["content"].strip()
+        a, _ = json.JSONDecoder().raw_decode(text[text.find("{"):])
         if a.get("situation") not in SITUATIONS:
             a["situation"] = "robot_ignored"
         # LLM は分類だけ使う（確率は較正されていないので 1 / 0）

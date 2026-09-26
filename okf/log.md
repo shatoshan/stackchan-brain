@@ -1,6 +1,7 @@
 # Update Log
 
 ## 2026-09-27
+* **Update**: evals にルールのみのベースライン判定器（rule 6/8、llm 8/8）。LLM 代替判定の JSON パースを頑健化（JSON の後ろの余分な文字で落ちていた）。
 * **Update**: [決定 003](/decisions/003-lan-only.md) と [xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md) に「ASR はローカル必須（セッション中はマイク音声が常時流れるため）」と、認識テキストは LLM 経由でクラウドに出ることを追記。
 * **Update**: [llm-proxy](/services/llm-proxy.md) に置換対象の検査スクリプトと実行時の警告を追加（イメージ更新で中国語文言が変わると静かに壊れるため）。
 * **Decision**: [決定 011](/decisions/011-usb-powered.md)。常時稼働は USB 給電前提、バッテリー・発熱は評価しない。
