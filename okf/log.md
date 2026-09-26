@@ -1,6 +1,8 @@
 # Update Log
 
 ## 2026-09-26
+* **Creation**: [brain](/services/brain.md)（M3 ステップ1）。端末 ⇔ xiaozhi-server の WebSocket 透過中継とセッションログ。xiaozhi-server の `server.websocket` を brain（8010）に向け、実機で会話・ツール呼び出しが中継経由で動くことを確認。
+* **Finding**: サーバーが切断すると端末は一度自動で再接続し、無音 150 秒ほどで再び切断される。[XiaoZhi プロトコル](/protocol/xiaozhi-protocol.md)、[決定 007](/decisions/007-proactive-speech-path.md) に追記。
 * **Verification**: human:shingo が首（右向き）と LED（青）の物理動作を確認。[端末MCPツール](/firmware/device-mcp-tools.md)、[ファーム書き込み](/runbooks/firmware-flash.md) に `verified` を記録。
 * **Decision**: [決定 007](/decisions/007-proactive-speech-path.md) を案 A（brain の WebSocket 中継）で確定し `stable` に。
 * **Milestone**: M2 達成（エージェント確認、`verified` は人間待ち）。ESP-IDF v5.5.4 を導入し、`OTA_URL` だけを `sdkconfig.defaults.local` で変えたファームを書き込み（事前に Flash 16MB をバックアップ）。実機が自前サーバーに接続し日本語で会話、首（`set_head_angles`）と LED（`set_led_color`）を LLM から操作できた。[ファーム書き込み](/runbooks/firmware-flash.md) を `stable` に。

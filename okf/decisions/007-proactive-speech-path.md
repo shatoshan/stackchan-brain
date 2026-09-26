@@ -53,6 +53,11 @@ sources:
 # 理由
 中継なら stt / tts テキストも全部見えるので、状態ブロブの「直近発話」「最終発話からの秒数」も同時に取れる。
 
+# 実装状況
+
+- 2026-09-26 ステップ1（透過中継と記録）を実装し、実機で会話・ツール呼び出しが中継経由で動くことを確認。→ [brain](/services/brain.md)
+- 発見: サーバーが切断すると端末は一度自動で再接続する（→ [XiaoZhi プロトコル](/protocol/xiaozhi-protocol.md)）。
+
 # 検証が必要な前提（M1〜M3）
 - 実機のセッション中は `speaking`⇔`listening` を往復し続けることは M2 で確認済み（→ [XiaoZhi プロトコル](/protocol/xiaozhi-protocol.md)）。
 - 端末の接続を長時間維持できるか（`close_connection_no_voice_time` を大きくする／端末側のタイムアウト／バッテリー・発熱）。

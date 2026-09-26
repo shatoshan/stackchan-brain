@@ -1,5 +1,5 @@
 # stackchan-brain
-# xiaozhi-server + llm-proxy。brain / mcp-bridge は M3 / M4 で追加する。
+# xiaozhi-server + llm-proxy + brain。mcp-bridge は M4 で追加する。
 # LLM・Jev はすべて Vercel AI Gateway 経由（okf/decisions/008-llm-via-vercel-gateway.md）。
 # 設定の根拠: okf/services/xiaozhi-esp32-server.md、手順: okf/runbooks/server-startup.md
 
@@ -56,5 +56,28 @@ services:
       start_period: 10s
       retries: 3
 
-  # brain:        # M3: Jev 判定ループ + LLM 発話生成（brain/）
+  brain:
+    # 端末 ⇔ xiaozhi-server の WebSocket 中継（okf/decisions/007-proactive-speech-path.md）。
+    # xiaozhi-server の server.websocket をここ（8010）に向けると、OTA 経由で端末がここに繋ぐ
+    build: ./brain
+    container_name: brain
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Tokyo
+      BRAIN_UPSTREAM_WS: ws://xiaozhi-server:8000/xiaozhi/v1/
+      BRAIN_SESSION_LOG_DIR: /data/sessions
+    ports:
+      - "8010:8010"   # 端末からの WebSocket（LAN 内のみ）
+    volumes:
+      - ./data/brain:/data
+    depends_on:
+      xiaozhi-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
   # mcp-bridge:   # M4: option-quants 等を MCP 接続点に繋ぐ（mcp/）

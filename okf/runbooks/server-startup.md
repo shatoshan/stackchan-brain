@@ -29,11 +29,12 @@ sources:
    curl -fL -o models/SenseVoiceSmall/model.pt https://modelscope.cn/models/iic/SenseVoiceSmall/resolve/master/model.pt
    ```
    2026-09-26 取得分: 936,291,369 bytes、sha256 `833ca2dcfdf8ec91bd4f31cfac36d6124e0c459074d5e909aec9cabe6204a3ea`。[^run-0926]
-3. 起動: `docker compose up -d`。先に [llm-proxy](/services/llm-proxy.md) が healthy になってから xiaozhi-server が起動する。コンテナ起動時に `config/xiaozhi/render_config.py` が `config/xiaozhi/config.template.yaml` を展開して `data/xiaozhi/.config.yaml`（パーミッション 600）を書き、その後 `python app.py` が走る。
+3. 起動: `docker compose up -d`（初回は brain のイメージをビルドする）。llm-proxy → xiaozhi-server → [brain](/services/brain.md) の順に healthy になる。コンテナ起動時に `config/xiaozhi/render_config.py` が `config/xiaozhi/config.template.yaml` を展開して `data/xiaozhi/.config.yaml`（パーミッション 600）を書き、その後 `python app.py` が走る。
 4. 確認:
    - `docker compose ps` で `llm-proxy` と `xiaozhi-esp32-server` が両方 `healthy`（ASR ロード込みで約 15〜30 秒）。
    - `docker logs xiaozhi-esp32-server` に `初始化组件: llm成功 GatewayLLM`、`asr成功 FunASR`、`OTA接口是` が出る。ログ中の `172.x` の IP はコンテナ内のもので無視してよい。[^deploy]
-   - `curl http://<LAN IP>:8003/xiaozhi/ota/` → `OTA接口运行正常，向设备发送的websocket地址是：ws://<LAN IP>:8000/xiaozhi/v1/`
+   - `curl http://<LAN IP>:8003/xiaozhi/ota/` → `OTA接口运行正常，向设备发送的websocket地址是：ws://<LAN IP>:8010/xiaozhi/v1/`（端末は brain に繋ぐ）
+   - 実機は AI Agent を開く時に OTA で接続先を取り直す。接続先を変えたら AI Agent を開き直す。
    - 疑似デバイスで一往復: [疑似デバイス](/runbooks/simulator.md)
 
 # 2026-09-26 の実行結果

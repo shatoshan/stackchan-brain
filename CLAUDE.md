@@ -25,10 +25,10 @@ LLM（GPT-6 Luna）と Jev はすべて Vercel AI Gateway 経由で、キーは 
 
 | パス | 内容 |
 |---|---|
-| `docker-compose.yml` | xiaozhi-server（公式イメージ `server_0.9.6`）＋ llm-proxy。brain / mcp-bridge は M3 / M4 で追加 |
+| `docker-compose.yml` | xiaozhi-server（公式イメージ `server_0.9.6`）＋ llm-proxy ＋ brain。mcp-bridge は M4 で追加 |
 | `llm-proxy/` | xiaozhi-server → Vercel AI Gateway 中継（`reasoning_effort` 注入とキー付与） |
 | `config/xiaozhi/` | xiaozhi-server 上書き設定テンプレートと、起動時に `.env` で展開するスクリプト |
-| `brain/` | Jev 判定ループ、状態ブロブ組み立て、LLM 発話生成（M3〜） |
+| `brain/` | 端末 ⇔ xiaozhi-server の WebSocket 中継（8010）と会話ログ。M3 で Jev 判定ループ・発話注入を追加 |
 | `mcp/` | MCP 接続点に繋ぐ MCP サーバー（option-quants、天気等。M4〜） |
 | `sim/` | 疑似デバイス（`text_client.py`） |
 | `evals/` | 状態ブロブ→Jev 判定の記録と再生（M3〜） |
@@ -40,9 +40,10 @@ LLM（GPT-6 Luna）と Jev はすべて Vercel AI Gateway 経由で、キーは 
 cp .env.example .env                  # 初回。SERVER_LAN_IP と AI_GATEWAY_API_KEY を書く
 docker compose up -d                  # 起動（設定を変えたら --force-recreate）
 docker compose ps                     # healthy を確認
-docker logs -f xiaozhi-esp32-server   # ログ（LLM の上流エラーは docker logs llm-proxy）
+docker logs -f brain                  # 会話の要約ログ（user / robot / tool call）
+docker logs -f xiaozhi-esp32-server   # サーバーの詳細ログ（LLM の上流エラーは docker logs llm-proxy）
 curl http://<LAN IP>:8003/xiaozhi/ota/                                   # OTA 確認
-docker compose exec -T xiaozhi-server python - "こんにちは" < sim/text_client.py   # 一往復テスト
+docker compose exec -T xiaozhi-server python - --url ws://brain:8010/xiaozhi/v1/ "こんにちは" < sim/text_client.py   # 実機と同じ経路で一往復
 docker compose down
 ```
 

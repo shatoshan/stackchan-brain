@@ -23,6 +23,7 @@ okf_version: "0.2"
 # services — サーバー群
 
 * [xiaozhi-esp32-server（最小構成）](services/xiaozhi-esp32-server.md) - 起動方法・設定形式・LLM/ASR/TTS の設定キー、OTA、発話押し込み API の有無。
+* [brain](services/brain.md) - 端末 ⇔ xiaozhi-server の WebSocket 中継と会話ログ。自律発話の土台。
 * [llm-proxy](services/llm-proxy.md) - xiaozhi-server → Vercel AI Gateway 中継。reasoning_effort 注入とキー付与。
 
 # external — 外部 API

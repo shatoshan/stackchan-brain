@@ -31,6 +31,9 @@ sources:
   - id: m2-0926
     resource: process:claude-code-session-2026-09-26
     title: 2026-09-26 M2 実機試験（MAC XX:XX:XX:XX:XX:XX、App 1.5.1、シリアルログ＋xiaozhi-server ログ）
+  - id: m3-relay
+    resource: process:claude-code-session-2026-09-26
+    title: 2026-09-26 M3 中継試験（brain のセッションログ）
 ---
 
 > `status: draft` の理由: ソースコードから読み取った内容で、実機・疑似デバイスでの通信確認をまだしていない。公式プロトコル文書（Feishu wiki）は未読。
@@ -85,6 +88,9 @@ sources:
 3. 発話は端末側 VAD で区切られ、サーバーが ASR → LLM → TTS。`tts start` で `speaking`、`tts stop` で再び `listening`（`mode: auto` なので自動で聞き続ける）。
 4. `handle_exit_intent` 等で終了すると `listening -> idle`。無音 `close_connection_no_voice_time`（120 秒）でもサーバーが切断する。
 
+- **サーバー側から切断した直後、端末は一度だけ自分から繋ぎ直す。** `exit_commands`（「終了」）で即切断した時は約 3 秒後に再接続し `listen`/`start`（auto）で聞き取り状態になった。`handle_exit_intent` で挨拶してから終わった時も約 3.5 秒後に再接続し、数秒で idle に戻った。[^m3-relay]
+- 繋ぎ直したセッションは、無音のまま約 150 秒後（`close_connection_no_voice_time` 120 秒＋α）にサーバーが閉じ、その後は再接続しなかった。[^m3-relay]
+- ⇒ 「セッションを閉じる＝端末が黙る」ではない。自律発話の制御では、再接続直後のセッションもユーザーが話しかけたセッションと区別できる必要がある（ウェイクワード由来かは端末から送られない）。
 - セッション中は `speaking` と `listening` を往復し続けるので、中継でサーバー発話を差し込む余地はこの間にある（[決定 007](/decisions/007-proactive-speech-path.md)）。[^m2-0926]
 
 # 自律発話への含意
@@ -98,3 +104,4 @@ sources:
 [^srv-config]: xiaozhi-esp32-server config.yaml
 [^srv-devcall]: xiaozhi-esp32-server docs/device-call-guide.md
 [^m2-0926]: 2026-09-26 M2 実機試験
+[^m3-relay]: 2026-09-26 M3 中継試験（brain のセッションログ）

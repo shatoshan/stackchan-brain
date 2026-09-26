@@ -1,5 +1,6 @@
 # brain
 
-M3 で実装する。Jev 定期判定ループ、状態ブロブ組み立て、LLM（GPT-6 Luna）発話生成。
+端末 ⇔ xiaozhi-server の WebSocket 中継（`relay.py`、ポート 8010）。会話を `data/brain/sessions/*.jsonl` に記録する。
+M3 で Jev 判定ループと発話注入を追加する。
 
-先に `okf/design/three-layer-architecture.md`、`okf/design/state-blob.md`、`okf/decisions/007-proactive-speech-path.md`（自律発話の経路：brain は端末⇔xiaozhi-server の WebSocket 中継になる）を読むこと。
+先に `okf/services/brain.md`、`okf/design/three-layer-architecture.md`、`okf/design/state-blob.md`、`okf/decisions/007-proactive-speech-path.md` を読むこと。

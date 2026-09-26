@@ -7,8 +7,9 @@ server:
   ip: 0.0.0.0
   port: 8000
   http_port: 8003
-  # OTA が端末に返す WebSocket URL。Docker 内からは LAN IP が分からないので明示する
-  websocket: ws://${SERVER_LAN_IP}:8000/xiaozhi/v1/
+  # OTA が端末に返す WebSocket URL。Docker 内からは LAN IP が分からないので明示する。
+  # 端末は brain（8010）に繋ぎ、brain が xiaozhi-server（8000）へ中継する（okf/decisions/007）
+  websocket: ws://${SERVER_LAN_IP}:8010/xiaozhi/v1/
   vision_explain: http://${SERVER_LAN_IP}:8003/mcp/vision/explain
   timezone_offset: +9
   auth:
