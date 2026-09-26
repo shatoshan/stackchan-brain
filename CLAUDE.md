@@ -13,7 +13,7 @@ LLM（GPT-6 Luna）と Jev はすべて Vercel AI Gateway 経由で、キーは 
 ## 設計原則
 
 1. **xiaozhi-esp32-server 本体は改変しない。** 差し込み口（LLM プロバイダ設定・MCP 接続点・プラグイン・context_providers）だけを使い、本体は公式 Docker イメージとして依存する。
-2. **端末ファームは `OTA_URL`（必要なら `STACKCHAN_SERVER_URL`）の変更以外いじらない。** 変更は `firmware/sdkconfig.defaults.local` で行う。
+2. **端末ファームの変更は最小限。** 設定は `OTA_URL`（必要なら `STACKCHAN_SERVER_URL`）を `sdkconfig.defaults.local` で変えるだけ。コードの変更は `firmware-patches/` で管理するパッチに限り、1 目的 1 パッチ、既存ファイルへの変更は数行、xiaozhi-esp32 部分（プロトコル処理）には触れない（決定 010）。
 3. **option-quants とは MCP 契約のみで連携する。** コード依存ゼロ。
 4. **反射（端末）／直感（Jev）／熟考（LLM = GPT-6 Luna）の3層を守る。** Jev に生成させない。LLM を毎秒呼ばない。
 5. **LAN 内で閉じる。** インターネット露出・TLS・認証はスコープ外。ポート転送しない。
@@ -30,6 +30,7 @@ LLM（GPT-6 Luna）と Jev はすべて Vercel AI Gateway 経由で、キーは 
 | `config/xiaozhi/` | xiaozhi-server 上書き設定テンプレートと、起動時に `.env` で展開するスクリプト |
 | `brain/` | 端末 ⇔ xiaozhi-server の WebSocket 中継（8010）、発話差し込み API（127.0.0.1:8011）、カメラ写真の受け口と顔検出（8012）、Jev 判定ループ |
 | `mcp/` | MCP 接続点に繋ぐ MCP サーバー（option-quants、天気等。M4〜） |
+| `firmware-patches/` | StackChan 公式ファームに当てるパッチ（決定 010） |
 | `sim/` | 疑似デバイス（`text_client.py`） |
 | `evals/` | 状態ブロブ→Jev 判定の記録と再生（M3〜） |
 | `okf/` | OKF v0.2 知識バンドル |
@@ -54,7 +55,7 @@ docker compose down
 ## 禁止事項
 
 - xiaozhi-server のソースをパッチする、独自イメージをビルドして差し替える（原則1）。
-- ファームの追跡ファイルを編集する、`OTA_URL` / `STACKCHAN_SERVER_URL` 以外の Kconfig を変える（原則2）。
+- `firmware-patches/` に無いファーム変更をする、xiaozhi-esp32 部分を変える、`OTA_URL` / `STACKCHAN_SERVER_URL` 以外の Kconfig を変える（原則2）。
 - 実キーを `.env` 以外（設定テンプレート・コード・`okf/`・コミットメッセージ）に書く。
 - Vercel AI Gateway 以外の LLM プロバイダのキーを直接持ち込む（決定 008）。
 - 一次情報を確認せずに設定キー名・モデル ID・API 仕様を書く。

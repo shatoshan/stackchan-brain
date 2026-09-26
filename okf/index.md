@@ -50,6 +50,7 @@ okf_version: "0.2"
 * [006: 知識管理は OKF v0.2](decisions/006-okf-for-knowledge.md) - 可視の okf/ に置き、docs/ は自由形式用。
 * [007: 自律発話は brain の WebSocket 中継で届ける](decisions/007-proactive-speech-path.md) - 発話押し込み API が無いため、中継から listen/detect を注入する。
 * [008: LLM は GPT-6 Luna、Gateway に統一](decisions/008-llm-via-vercel-gateway.md) - コスト効率とキー一本化。llm-proxy を挟む理由。
+* [010: シャッター音を消すファームパッチ](decisions/010-firmware-silent-shutter.md) - 原則2に firmware-patches/ の最小パッチの例外を設ける。
 * [009: 近接センサで会話を開くファームパッチ](decisions/009-firmware-proximity-wake.md) - センサが数 cm しか検知できず不採用。（deprecated）
 
 # runbooks — 手順書

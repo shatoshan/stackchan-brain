@@ -88,7 +88,7 @@ sources:
 - `StackChanCamera::Capture()` の先頭で毎回 `hal_bridge::app_play_sound(OGG_CAMERA_SHUTTER)` を鳴らす。`take_photo` は必ず `Capture()` を通るので、ファーム無改変では消せない。[^camera]
 - 撮影前後に音量を 0 にする回避は不採用: 再生が非同期で確実でなく、音量設定は Flash に保存されるため頻繁に変えると書き込みが増える。
 - 対処（ファーム無改変）: 会話中は撮らない。誰も話さない時間が 30 秒続いたら 20 秒ごと、相手が離れた（判定休止中）後は戻りを見るため 15 秒ごとに撮る（`BRAIN_PRESENCE_AFTER_QUIET`、`BRAIN_PRESENCE_INTERVAL`、`BRAIN_PRESENCE_INTERVAL_DORMANT`）。
-- 完全に消すには `Capture()` の 1 行を消すパッチが要る（原則2の例外。未決定）。
+- 完全に消すため、`Capture()` の 1 行をコメントアウトするパッチを当てた（[決定 010](/decisions/010-firmware-silent-shutter.md)、原則2の例外）。撮影頻度の制限（会話中は撮らない）は電力と帯域のために残す。
 
 # 首の向き
 

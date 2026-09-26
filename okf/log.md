@@ -1,6 +1,7 @@
 # Update Log
 
 ## 2026-09-26
+* **Decision**: [決定 010](/decisions/010-firmware-silent-shutter.md)。原則2に `firmware-patches/` の最小パッチの例外を設け（human:shingo）、撮影時のシャッター音を消すパッチを当てて書き込み。CLAUDE.md、[ファーム書き込み](/runbooks/firmware-flash.md)、[カメラで在席を知る](/design/camera-presence.md) を更新。
 * **Update**: 撮影のたびに端末がシャッター音を鳴らす（ファーム固定）ため、会話中は撮らず、沈黙 30 秒以降と相手が離れた後だけ撮るように。`person_arrived` の話しかけは LLM 経由に（定型文だと戻ってきた文脈が履歴に残らない）。首の向きの符号は正しいことを確認。[カメラで在席を知る](/design/camera-presence.md)
 * **Update**: カメラでの在席確認を実装（ファーム無改変）。中継で `take_photo` の送り先を brain に書き換え、YuNet で LAN 内顔検出。実機で顔の有無を検出でき、LLM の「何が見える？」も転送で動作。[カメラで在席を知る](/design/camera-presence.md)、[brain](/services/brain.md)、[状態ブロブ](/design/state-blob.md)、[直感層の質問設計](/design/jev-questions.md) を更新。
 * **Finding**: xiaozhi-server の VLLM が「(请使用中文回复)」を固定で付け、結果をそのまま読み上げる。llm-proxy で部分置換して日本語に。[xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md)、[llm-proxy](/services/llm-proxy.md)。

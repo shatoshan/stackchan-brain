@@ -1,0 +1,15 @@
+diff --git a/firmware/main/hal/board/stackchan_camera.cc b/firmware/main/hal/board/stackchan_camera.cc
+index 5ae1912..483953c 100644
+--- a/firmware/main/hal/board/stackchan_camera.cc
++++ b/firmware/main/hal/board/stackchan_camera.cc
+@@ -402,8 +402,8 @@ bool StackChanCamera::Capture()
+         return false;
+     }
+ 
+-    // Play shutter sfx
+-    hal_bridge::app_play_sound(OGG_CAMERA_SHUTTER);
++    // stackchan-brain: シャッター音を鳴らさない（在席確認で定期的に撮るため）
++    // hal_bridge::app_play_sound(OGG_CAMERA_SHUTTER);
+ 
+     for (int i = 0; i < 3; i++) {
+         struct v4l2_buffer buf = {};
