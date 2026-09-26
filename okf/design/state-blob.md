@@ -17,11 +17,14 @@ sources:
 ```json
 {"now": "2026-09-26 21:29 (土)", "session_age_seconds": 60, "seconds_since_user_spoke": 33,
  "seconds_since_robot_spoke": 26, "recent_conversation": ["user: …", "robot: …"],
- "proactive_utterances_this_session": 0, "mood": 0.6, "person_detected": null}
+ "proactive_utterances_this_session": 0, "mood": 0.6,
+ "person": {"faces_in_view": 1, "largest_face_width_ratio": 0.31, "seconds_face_visible": 20,
+            "seconds_since_face_seen": 0, "checked_seconds_ago": 3}}
 ```
 
 - `recent_conversation` は中継が記録した直近 6 発話（古い順）。ロボットの発話は 1 回の返答をまとめて 1 件。
-- 人検出・センサ値・外部イベント・前回セッションの要約はまだ無い。
+- `person` はカメラの顔検出（→ [カメラで在席を知る](/design/camera-presence.md)）。確認していない / 30 秒以上古い時は null。
+- センサ値・外部イベント・前回セッションの要約はまだ無い。
 
 # 含める予定の項目
 

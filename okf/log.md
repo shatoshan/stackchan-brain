@@ -1,6 +1,9 @@
 # Update Log
 
 ## 2026-09-26
+* **Update**: 撮影のたびに端末がシャッター音を鳴らす（ファーム固定）ため、会話中は撮らず、沈黙 30 秒以降と相手が離れた後だけ撮るように。`person_arrived` の話しかけは LLM 経由に（定型文だと戻ってきた文脈が履歴に残らない）。首の向きの符号は正しいことを確認。[カメラで在席を知る](/design/camera-presence.md)
+* **Update**: カメラでの在席確認を実装（ファーム無改変）。中継で `take_photo` の送り先を brain に書き換え、YuNet で LAN 内顔検出。実機で顔の有無を検出でき、LLM の「何が見える？」も転送で動作。[カメラで在席を知る](/design/camera-presence.md)、[brain](/services/brain.md)、[状態ブロブ](/design/state-blob.md)、[直感層の質問設計](/design/jev-questions.md) を更新。
+* **Finding**: xiaozhi-server の VLLM が「(请使用中文回复)」を固定で付け、結果をそのまま読み上げる。llm-proxy で部分置換して日本語に。[xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md)、[llm-proxy](/services/llm-proxy.md)。
 * **Deprecation**: [決定 009](/decisions/009-firmware-proximity-wake.md)。近接センサは数 cm しか検知できず不採用（human:shingo）。原則2を元に戻し、端末もパッチなしに戻す。
 * **Creation**: [カメラで在席を知る](/design/camera-presence.md)（draft）。共有レポートの経路 1（`/stackChan/ws`）は Avatar アプリ専用で AI Agent と同時に動かないと判明。経路 2（`take_photo`）は送り先を brain に書き換えればファーム無改変で使える。
 * **Decision**: [決定 009](/decisions/009-firmware-proximity-wake.md)。設計原則2を改訂し、`firmware-patches/` の最小パッチを許す。最初のパッチは近接センサ（LTR-553）で待機中に会話を開くもの。CLAUDE.md も改訂。

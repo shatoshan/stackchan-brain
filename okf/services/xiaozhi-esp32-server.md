@@ -184,6 +184,7 @@ TTS:
 - 対処: [llm-proxy](/services/llm-proxy.md) で既知の固定文言だけを日本語に置換。置換後は 5 回中 5 回日本語。[^run-0926b]
 
 ## その他
+- **VLLM（画像説明）**: OpenAI 互換の VLLM プロバイダは質問の末尾に「(请使用中文回复)」を固定で付ける。さらに `/mcp/vision/explain` は結果を `action: RESPONSE` で返すので、端末の `take_photo` の結果が LLM を通らずそのまま読み上げられる。日本語にするには llm-proxy で置換する（→ [llm-proxy](/services/llm-proxy.md)）。[^m2-0926]
 - 無音タイムアウト（`close_connection_no_voice_time`）で切る時、`end_prompt.enable: true`（デフォルト）だと中国語の指示（「以"时间过得真快"未来头…」）を LLM に送ってお別れを言わせる。本リポジトリでは `enable: false`。`close_connection_no_voice_time` は `.env` の `XIAOZHI_NO_VOICE_CLOSE_SEC` で設定（本リポジトリの既定 600。自律発話できる時間窓になる）。[^m2-0926]
 - FunASR（SenseVoiceSmall、CPU）は MacBook Air の Docker（arm64）で RTF 約 1.0（短い発話 1 回の認識に約 1.6 秒）。それでも実機での体感は「話し終わり→返答の音声開始」約 1.5 秒（端末側 VAD で発話終了を検出してから計測）。[^m2-0926]
 - `exit_commands` も句読点・空白除去後の完全一致。一致すると接続を閉じる。デフォルトは中国語（退出・关闭）。[^intent]

@@ -68,11 +68,15 @@ services:
       BRAIN_UPSTREAM_WS: ws://xiaozhi-server:8000/xiaozhi/v1/
       BRAIN_SESSION_LOG_DIR: /data/sessions
       BRAIN_JUDGMENT_DIR: /data/judgments
+      BRAIN_CAMERA_DIR: /data/camera
+      # 端末の take_photo の送り先を brain に向ける（端末から見える LAN の URL）
+      BRAIN_VISION_URL: http://${SERVER_LAN_IP}:8012/vision/explain
       BRAIN_JUDGE_ENABLED: ${BRAIN_JUDGE_ENABLED:-1}
       LLM_MODEL: ${LLM_MODEL:-openai/gpt-6-luna}
     ports:
       - "8010:8010"   # 端末からの WebSocket（LAN 内のみ）
       - "127.0.0.1:8011:8011"   # 操作 API（/sessions、/say）。この Mac からだけ使う
+      - "8012:8012"   # 端末カメラの写真の受け口（LAN 内のみ）
     volumes:
       - ./data/brain:/data
       - ./evals:/evals:ro

@@ -28,6 +28,7 @@ sources:
 - `POST */chat/completions`: JSON に `reasoning_effort` も `reasoning` も無ければ `LLM_REASONING_EFFORT`（既定 `none`）を足す。[^code]
 - 全リクエストで `Authorization` を `Bearer $AI_GATEWAY_API_KEY` に差し替え、`https://ai-gateway.vercel.sh` に同じパスで転送。レスポンス（SSE 含む）はチャンク単位でそのまま返す。[^code]
 - 本体が会話履歴に差し込む中国語の固定文言（few-shot 例、ウェイクワード時の「嘿，你好呀」）を、`REWRITES` 表に従って **完全一致で** 日本語に置き換える。対象は `messages[].content` と `tool_calls[].function.arguments` 内の文字列値。理由は [xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md) の「中国語の few-shot 注入」。[^code]
+  - 文中に埋め込まれる固定指示は部分置換（`SUBSTRING_REWRITES`）。VLLM が画像説明の質問に付ける「(请使用中文回复)」を日本語の指示に置き換える。画像付きメッセージ（content が配列）の文章部分も対象。
   - 本体の文言が変わると一致しなくなり、置換されないだけ（壊れはしない）。イメージを上げたら `rewritten=` のログ件数で確認する。server_0.9.6 では 1 リクエストあたり 8 件。
 - `LLM_PROXY_LOG_BODY=1` でリクエスト本文をログに出す（デバッグ用。会話内容が残るので常用しない）。
 - `GET /healthz` はヘルスチェック用。ポートはホストに公開しない（compose ネットワーク内の `http://llm-proxy:8080/v1`）。

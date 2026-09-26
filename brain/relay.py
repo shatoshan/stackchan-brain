@@ -72,6 +72,10 @@ class Session:
     # brain が端末 MCP ツールを呼んだ時の応答待ち（id -> Future）
     mcp_pending: dict = field(default_factory=dict)
     last_head_move_at: float = 0.0
+    # カメラによる在席確認の結果（brain/vision.py が更新）
+    presence: dict = field(default_factory=dict)
+    face_since: float = 0.0     # 顔が見え続けている開始時刻（0 なら見えていない）
+    last_face_at: float = 0.0   # 最後に顔が見えた時刻
 
     def info(self) -> dict:
         now = time.time()
@@ -86,11 +90,14 @@ class Session:
 
 
 class Relay:
-    def __init__(self, upstream_url: str, log_dir: Path):
+    def __init__(self, upstream_url: str, log_dir: Path, vision_url: str | None = None):
         self.upstream_url = upstream_url
         self.log_dir = log_dir
         self.sessions: dict[str, Session] = {}
         self.client: ClientSession | None = None
+        # 端末の写真送り先を brain に向ける（None なら書き換えない）
+        self.vision_url = vision_url
+        self.vision_upstream: dict[str, str] = {}  # device_id -> xiaozhi-server の元の vision URL
 
     async def start(self, app: web.Application) -> None:
         self.client = ClientSession()
@@ -187,6 +194,21 @@ class Relay:
         log.info("[%s] inject(%s): %s", session.device_id, mode, text)
         return session.info()
 
+    def update_presence(self, device_id: str, result: dict) -> None:
+        """カメラの顔検出結果をセッションに反映する。"""
+        now = time.time()
+        for session in self.sessions.values():
+            if session.device_id != device_id:
+                continue
+            session.presence = dict(result, checked_at=now)
+            if result.get("faces"):
+                session.last_face_at = now
+                if not session.face_since:
+                    session.face_since = now
+            else:
+                session.face_since = 0.0
+            self._record(session, "presence", result)
+
     async def send_emotion(self, session: Session, emotion: str) -> None:
         """端末の表情を変える（xiaozhi-server が送る {"type":"llm","emotion"} と同じ形）。"""
         msg = {"type": "llm", "emotion": emotion, "session_id": session.session_id}
@@ -234,6 +256,16 @@ class Relay:
                         if not fut.done():
                             fut.set_result(data["payload"])
                         self._record(session, "brain-up", data)
+                        continue
+                # MCP initialize の vision.url（写真の送り先）を brain に書き換える
+                if direction == "down" and data.get("type") == "mcp" and self.vision_url:
+                    params = (data.get("payload") or {}).get("params") or {}
+                    vision = (params.get("capabilities") or {}).get("vision")
+                    if isinstance(vision, dict) and vision.get("url"):
+                        self.vision_upstream[session.device_id] = vision["url"]
+                        vision["url"] = self.vision_url
+                        await sink.send_str(json.dumps(data, ensure_ascii=False))
+                        self._record(session, "down-rewritten", {"type": "mcp", "vision_url": self.vision_url})
                         continue
                 # サーバーは stt の句読点を一部落とすので正規化して比べる
                 if direction == "down" and data.get("type") == "stt" and normalize(str(data.get("text", ""))) in session.suppress_stt:
@@ -335,6 +367,7 @@ def create_app() -> web.Application:
     relay = Relay(
         upstream_url=os.environ.get("BRAIN_UPSTREAM_WS", "ws://xiaozhi-server:8000/xiaozhi/v1/"),
         log_dir=Path(os.environ.get("BRAIN_SESSION_LOG_DIR", "/data/sessions")),
+        vision_url=os.environ.get("BRAIN_VISION_URL") or None,
     )
     app = web.Application()
     app["relay"] = relay

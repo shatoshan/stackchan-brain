@@ -50,6 +50,7 @@ selected_module:
   VAD: SileroVAD
   ASR: FunASR
   LLM: GatewayLLM
+  VLLM: GatewayVLLM
   TTS: EdgeTTS
   Memory: nomem
   Intent: function_call
@@ -78,6 +79,14 @@ LLM:
     api_key: via-llm-proxy
     # temperature / top_p は推論モデルでの扱いが未確認のため指定しない
     max_tokens: 300
+
+VLLM:
+  GatewayVLLM:
+    # LLM が take_photo で撮った写真の説明（「何が見える？」）。llm-proxy 経由で Gateway の Luna を使う
+    type: openai
+    base_url: http://llm-proxy:8080/v1
+    model_name: ${LLM_MODEL}
+    api_key: via-llm-proxy
 
 TTS:
   EdgeTTS:

@@ -18,6 +18,7 @@ from pathlib import Path
 from aiohttp import ClientSession, ClientTimeout
 
 from relay import InjectError, Relay, Session
+from vision import PRESENCE_QUESTION
 
 log = logging.getLogger("brain.judge")
 
@@ -47,10 +48,13 @@ WEEKDAYS = "月火水木金土日"
 SITUATIONS = {
     "pause_in_conversation": "The person is still there and the conversation just paused; a natural chance to continue the topic or start a light one",
     "just_woken_no_talk": "The person woke the robot up but has not said anything yet",
-    "person_left_or_busy": "The person said they are leaving, going somewhere, sleeping, or busy (e.g. going to take a bath)",
+    "person_arrived": "The camera ('person.faces_in_view' > 0) shows someone in front of the robot now and nobody is talking. "
+                      "This applies even if the person earlier said they were leaving: seeing a face again means they came back",
+    "person_left_or_busy": "The person said they are leaving, going somewhere, sleeping, or busy (e.g. going to take a bath), "
+                           "and the camera does not currently show anyone ('person' is null or faces_in_view is 0)",
     "robot_ignored": "The robot already started talking on its own and got no reply",
 }
-SPEAKABLE = {"pause_in_conversation", "just_woken_no_talk"}
+SPEAKABLE = {"pause_in_conversation", "just_woken_no_talk", "person_arrived"}
 
 SPEECH_KINDS = {
     "follow_up": "Continue or follow up on the recent conversation topic",
@@ -77,6 +81,15 @@ EMOTIONS = {
 FACE_POSE = {"yaw": 0, "pitch": int(os.environ.get("BRAIN_FACE_PITCH", "20"))}
 # 見回しは Jev に聞かず、ルールで動かす（聞き取り中に誰も話さない時間が続いたら、ランダムな間隔でよそ見）
 IDLE_GLANCE_AFTER = float(os.environ.get("BRAIN_IDLE_GLANCE_AFTER", "25"))
+# カメラでの在席確認（brain/vision.py）。聞き取り中にこの間隔で take_photo を呼ぶ。0 で無効
+PRESENCE_INTERVAL = float(os.environ.get("BRAIN_PRESENCE_INTERVAL", "20"))
+# 撮影のたびに端末がシャッター音を鳴らす（ファーム固定）ので、会話中は撮らない。
+# 誰も話さない時間がこれ以上続いたら撮り始める。相手が離れた後（判定休止中）は戻りを見るため短い間隔で撮る
+PRESENCE_AFTER_QUIET = float(os.environ.get("BRAIN_PRESENCE_AFTER_QUIET", "30"))
+PRESENCE_INTERVAL_DORMANT = float(os.environ.get("BRAIN_PRESENCE_INTERVAL_DORMANT", "15"))
+PRESENCE_FRESH = float(os.environ.get("BRAIN_PRESENCE_FRESH", "30"))  # これより古い確認結果は使わない
+CAMERA_HFOV = float(os.environ.get("BRAIN_CAMERA_HFOV", "60"))      # 水平画角（度）。顔の位置→首の yaw
+CAMERA_YAW_SIGN = float(os.environ.get("BRAIN_CAMERA_YAW_SIGN", "1"))  # 画像の右が yaw の正なら 1
 IDLE_GLANCE_GAP = (float(os.environ.get("BRAIN_IDLE_GLANCE_GAP_MIN", "30")), float(os.environ.get("BRAIN_IDLE_GLANCE_GAP_MAX", "60")))
 
 # llm モードで LLM に渡す指示（会話履歴には user 発話として残る）
@@ -84,7 +97,25 @@ LLM_INSTRUCTIONS = {
     "follow_up": "（ロボットから話しかける場面です。直前の会話の話題を踏まえて、一言だけ自然に話しかけてください。許可は求めないでください）",
     "question": "（ロボットから話しかける場面です。相手の今日の様子や好きなことについて、軽い質問を一つだけしてください。「聞いてもいい？」とは言わず、直接質問してください）",
     "time_remark": "（ロボットから話しかける場面です。今の時間帯について、ひとこと感想を言ってください）",
+    # 定型文だと「相手が戻ってきた」ことが会話履歴に残らず、その後の返答が噛み合わないので LLM に言わせる
+    "person_arrived": "（ロボットから話しかける場面です。カメラで、相手が目の前に来た（戻ってきた）のが見えました。"
+                      "「おかえり」など、来てくれたことへの短い一言を言ってください）",
 }
+
+
+def person_state(session: Session) -> dict | None:
+    """カメラの在席確認結果を状態ブロブ用にまとめる（確認していなければ None）。"""
+    p = session.presence
+    if not p or time.time() - p["checked_at"] > PRESENCE_FRESH:
+        return None
+    now = time.time()
+    return {
+        "faces_in_view": p.get("faces", 0),
+        "largest_face_width_ratio": p.get("largest_face_width_ratio"),
+        "seconds_face_visible": round(now - session.face_since) if session.face_since else 0,
+        "seconds_since_face_seen": round(now - session.last_face_at) if session.last_face_at else None,
+        "checked_seconds_ago": round(now - p["checked_at"]),
+    }
 
 
 def build_state(session: Session, mood: float) -> dict:
@@ -100,7 +131,7 @@ def build_state(session: Session, mood: float) -> dict:
         "recent_conversation": recent,
         "proactive_utterances_this_session": session.injections,
         "mood": round(mood, 2),
-        "person_detected": None,  # センサ値の取得経路は未実装
+        "person": person_state(session),  # カメラ（None は未確認）
     }
 
 
@@ -249,10 +280,13 @@ class Judge:
         log.info("[%s] idle glance yaw=%d pitch=%d", session.device_id, yaw, pitch)
 
     async def judge(self, session: Session) -> None:
+        self._maybe_check_presence(session)
         self._maybe_glance(session)
         mood = self._update_mood(session)
         if session.id in self.dormant:
-            if session.last_user_at <= self.dormant[session.id]:
+            since = self.dormant[session.id]
+            # ユーザーが話すか、休止後にカメラに顔が新しく映ったら判定を再開する
+            if session.last_user_at <= since and session.face_since <= since:
                 return
             del self.dormant[session.id]
         reason = self._gate(session)
@@ -283,18 +317,20 @@ class Judge:
         speak = ans["should_speak"] >= threshold
         action = None
         if not speak and ans.get("situation") in ("person_left_or_busy", "robot_ignored"):
-            self.dormant[session.id] = session.last_user_at
+            self.dormant[session.id] = time.time()
             action = {"dormant_until_user_speaks": True}
         if speak:
             kind = ans["speech_kind"]
+            if ans.get("situation") == "person_arrived":
+                kind = "person_arrived"
             if kind == "fixed_phrase":
                 mode, text = "verbatim", PHRASES[ans["phrase"]]
             else:
                 mode, text = "llm", LLM_INSTRUCTIONS[kind]
             try:
                 await self.relay.send_emotion(session, ans["emotion"])
-                # 話しかける時は相手の方を向く（応答は待たない）
-                asyncio.create_task(self._safe_head(session, FACE_POSE["yaw"], FACE_POSE["pitch"], 250))
+                # 話しかける時は相手の方を向く（カメラで顔が見えていればその方向、応答は待たない）
+                asyncio.create_task(self._face_person(session))
                 await self.relay.inject(text, mode, session.device_id)
                 self.pending[session.device_id] = time.time()
                 action = {"mode": mode, "kind": kind, "text": text, "emotion": ans["emotion"]}
@@ -315,6 +351,46 @@ class Judge:
             await self.relay.move_head(session, yaw, pitch, speed)
         except Exception as e:  # noqa: BLE001 首が動かなくても会話は続ける
             log.warning("[%s] head move failed: %s", session.device_id, e)
+
+    async def _face_person(self, session: Session) -> None:
+        p = session.presence
+        if p and p.get("faces") and time.time() - p["checked_at"] <= PRESENCE_FRESH:
+            try:
+                res = await self.relay.call_device_tool(session, "self.robot.get_head_angles", {})
+                cur = json.loads(res["result"]["content"][0]["text"])
+                yaw = cur["yaw"] + CAMERA_YAW_SIGN * (p["center_x"] - 0.5) * CAMERA_HFOV
+                yaw = int(max(-60, min(60, yaw)))
+                log.info("[%s] face at x=%.2f -> yaw %d (was %d)", session.device_id, p["center_x"], yaw, cur["yaw"])
+                await self._safe_head(session, yaw, FACE_POSE["pitch"], 250)
+                return
+            except Exception as e:  # noqa: BLE001
+                log.warning("[%s] face tracking failed: %s", session.device_id, e)
+        await self._safe_head(session, FACE_POSE["yaw"], FACE_POSE["pitch"], 250)
+
+    async def _check_presence(self, session: Session) -> None:
+        """brain の目印付きで take_photo を呼ぶ。結果は brain/vision.py が session.presence に入れる。"""
+        session.presence_requested_at = time.time()
+        try:
+            await self.relay.call_device_tool(session, "self.camera.take_photo",
+                                              {"question": PRESENCE_QUESTION}, timeout=20)
+        except Exception as e:  # noqa: BLE001
+            log.warning("[%s] presence check failed: %s", session.device_id, e)
+
+    def _maybe_check_presence(self, session: Session) -> None:
+        if not PRESENCE_INTERVAL or session.state != "listening" or not session.session_id:
+            return
+        now = time.time()
+        if session.id in self.dormant:
+            interval = PRESENCE_INTERVAL_DORMANT
+        else:
+            quiet_since = max(session.last_user_at, session.last_robot_end_at, session.started_at)
+            if now - quiet_since < PRESENCE_AFTER_QUIET:
+                return
+            interval = PRESENCE_INTERVAL
+        if now - getattr(session, "presence_requested_at", 0) < interval:
+            return
+        session.presence_requested_at = time.time()
+        asyncio.create_task(self._check_presence(session))
 
     async def _glance(self, session: Session, yaw: int, pitch: int) -> None:
         """よそ見して、少ししたら正面に戻る。"""

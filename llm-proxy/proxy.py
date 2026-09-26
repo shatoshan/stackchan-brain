@@ -39,14 +39,38 @@ REWRITES = {
 }
 
 
+# 文中に埋め込まれる中国語の固定指示 → 日本語（部分置換）。
+# 出典: core/providers/vllm/openai.py（画像説明の質問末尾に「(请使用中文回复)」を固定で付ける。結果はそのまま読み上げられる）
+SUBSTRING_REWRITES = {
+    "(请使用中文回复)": "（日本語で、1〜2文の短い話し言葉で答えてください）",
+}
+
+
+def _rewrite_text(text: str) -> tuple[str, bool]:
+    if text in REWRITES:
+        return REWRITES[text], True
+    changed = False
+    for old, new in SUBSTRING_REWRITES.items():
+        if old in text:
+            text = text.replace(old, new)
+            changed = True
+    return text, changed
+
+
 def rewrite_messages(messages: list) -> int:
     """messages 内の固定文言を置き換え、置き換えた件数を返す。"""
     count = 0
     for msg in messages:
         content = msg.get("content")
-        if isinstance(content, str) and content in REWRITES:
-            msg["content"] = REWRITES[content]
-            count += 1
+        if isinstance(content, str):
+            msg["content"], changed = _rewrite_text(content)
+            count += changed
+        elif isinstance(content, list):
+            # 画像付きメッセージ（[{type: text}, {type: image_url}]）の文章部分
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str):
+                    part["text"], changed = _rewrite_text(part["text"])
+                    count += changed
         for call in msg.get("tool_calls") or []:
             fn = call.get("function") or {}
             try:

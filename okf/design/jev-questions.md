@@ -35,7 +35,7 @@ sources:
 
 | 名前 | 型 | 選択肢 |
 |---|---|---|
-| `situation` | choice | `pause_in_conversation`、`just_woken_no_talk`（話してよい）／`person_left_or_busy`、`robot_ignored`（黙る） |
+| `situation` | choice | `pause_in_conversation`、`just_woken_no_talk`、`person_arrived`（話してよい）／`person_left_or_busy`、`robot_ignored`（黙る） |
 | `speech_kind` | choice | `follow_up`、`question`、`time_remark`、`fixed_phrase` |
 | `phrase` | choice | 定型フレーズ 5 種（`fixed_phrase` の時だけ使う） |
 | `emotion` | choice | `neutral`、`happy`、`doubtful`、`sad`（StackChan の表情名。`sleepy` は眠りポーズに入るので使わない） |
@@ -56,10 +56,16 @@ sources:
 - ロボットの質問に 27 秒返事がない場面で、Jev は `pause_in_conversation`（0.95）と判定し、happy の表情で話題の続きを言った。「ちょっと出かけてくる」の後は `person_left_or_busy` と判定し、話しかけなかった。人間が期待どおりと確認。[^m3-judge]
 - `person_left_or_busy` / `robot_ignored` と判定したら、ユーザーが次に話すまでそのセッションの判定を止める（無駄な呼び出しを防ぐ）。[^code]
 
+# カメラ情報の扱い（2026-09-26）
+
+- 状態ブロブに `person`（カメラの顔検出）を入れ、状況に `person_arrived` を追加した。
+- `person_arrived` の時は定型フレーズを使わず、LLM に「カメラで相手が戻ってきたのが見えた、おかえり等の一言」を指示する。定型文（verbatim）だと「戻ってきた」ことが xiaozhi-server の会話履歴に残らず、実機で相手の返事に「いってらっしゃい」と出かける前の文脈で答えてしまった。
+- 最初の説明文では、LLM は「出かけてくる」と言った後に顔が映っても `person_left_or_busy` と判定した。「以前出かけると言っていても、今顔が見えるなら戻ってきた」「離れた＝カメラにも誰もいない」と明記して解決。[^evals]
+
 # 評価
 
 - `evals/cases.jsonl` に状態ブロブと期待（話す / 黙る）を貯め、`docker compose exec -T brain python /evals/run.py` で現行ロジックを流す。[^evals]
-- 2026-09-26 時点: 6 ケース、LLM 判定で全問正解。Jev は 429 でほぼ未評価。
+- 2026-09-26 時点: 8 ケース（カメラ 2 件を含む）、LLM 判定で全問正解。Jev は 429 でほぼ未評価。
 
 [^code]: brain/judge.py
 [^evals]: evals/cases.jsonl
