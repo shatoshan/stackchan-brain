@@ -37,7 +37,7 @@ sources:
 
 # 既知の制約
 
-- 層2・3が決めた発話を端末に届ける経路は、xiaozhi-server に外部 API が無いため未確定。→ [決定 007](/decisions/007-proactive-speech-path.md)
+- 層2・3が決めた発話は、brain を端末⇔xiaozhi-server の WebSocket 中継にして注入する（xiaozhi-server に外部 API が無いため）。→ [決定 007](/decisions/007-proactive-speech-path.md)
 - 層1のセンサ値（近接・IMU 等）を端末からサーバーへ送る仕組みは、現行ファームの XiaoZhi プロトコル上には見当たらない（端末→サーバーの型は hello/listen/abort/mcp/iot 等のみ）。M3 までに要調査。→ [XiaoZhi プロトコル](/protocol/xiaozhi-protocol.md)
 
 [^kickoff]: stackchan-brain キックオフ指示書

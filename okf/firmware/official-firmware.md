@@ -31,6 +31,9 @@ sources:
   - id: xz-protocol-224
     resource: https://github.com/78/xiaozhi-esp32/blob/v2.2.4/main/protocols/protocol.cc
     title: xiaozhi-esp32 v2.2.4 main/protocols/protocol.cc
+  - id: m2-0926
+    resource: process:claude-code-session-2026-09-26
+    title: 2026-09-26 M2 実機試験（MAC XX:XX:XX:XX:XX:XX、App 1.5.1、シリアルログ＋xiaozhi-server ログ）
   - id: xz-app-224
     resource: https://github.com/78/xiaozhi-esp32/blob/v2.2.4/main/application.cc
     title: 78/xiaozhi-esp32 v2.2.4 main/application.cc
@@ -56,13 +59,19 @@ sources:
 # ウェイクワード
 
 - ESP-SR の WakeNet モデル `wn9_histackchan_tts3`（`CONFIG_SR_WN_WN9_HISTACKCHAN_TTS3=y`）。`CONFIG_SEND_WAKE_WORD_DATA=n` なのでウェイクワード音声はサーバーに送らない。[^sdk-defaults]
-- モデル情報は `wakenet9_tts3h12_Hi,Stack Chan_3_0.585_0.590`。検出時、端末は `{"type":"listen","state":"detect","text":"<ウェイクワード>"}` を送る。[^esp-sr-model] [^xz-protocol-224]
-  - 送られる文字列は `Hi,Stack Chan` と推定（モデル情報からの読み取り。実機ログでは未確認）。サーバー側は句読点・空白を除いて `HiStackChan` で照合する。
+- モデル情報は `wakenet9_tts3h12_Hi,Stack Chan_3_0.585_0.590`。実機のシリアルログでも `Wake word detected: Hi,Stack Chan` と出る。[^esp-sr-model] [^m2-0926]
+- **実機はウェイクワード検出後、`listen`/`detect`（ウェイクワード文字列付き）を送らず、WebSocket 接続→ hello → `{"type":"listen","state":"start","mode":"auto"}` だけを送る**（2026-09-26、5 セッションで確認）。`Protocol::SendWakeWordDetected` 自体は存在するが、この構成では呼ばれていない。[^xz-protocol-224] [^m2-0926]
+  - したがってサーバー側の `wakeup_words` 照合と、中国語「嘿，你好呀」の注入は実機では発生しない（音声認識結果がウェイクワードと一致した場合を除く）。
+
+# 起動と AI Agent
+
+- 電源投入後はランチャー画面。XiaoZhi は AI Agent アプリを開いた時に起動し、Wi-Fi 接続と OTA 問い合わせを行う。アプリの切り替えは warm reboot（`warm reboot request to app index: N` → `rst:0xc (RTC_SW_CPU_RST)`）で行われるので、再起動ログが出ても異常ではない。[^m2-0926]
 
 [^stackchan-readme]: m5stack/StackChan README
 [^sdk-defaults]: StackChan firmware/sdkconfig.defaults
 [^esp-sr-model]: esp-sr wn9_histackchan_tts3 _MODEL_INFO_
 [^xz-protocol-224]: xiaozhi-esp32 v2.2.4 protocol.cc
+[^m2-0926]: 2026-09-26 M2 実機試験
 [^fw-readme]: StackChan firmware/README.md
 [^repos-json]: StackChan firmware/repos.json
 [^fw-patch]: StackChan firmware/patches/xiaozhi-esp32.patch

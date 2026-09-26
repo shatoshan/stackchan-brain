@@ -28,6 +28,9 @@ sources:
   - id: xz-protocol-doc
     resource: https://ccnphfhqs21z.feishu.cn/wiki/M0XiwldO9iJwHikpXD5cEx71nKh
     title: 小智通信协议（Feishu wiki、未読）
+  - id: m2-0926
+    resource: process:claude-code-session-2026-09-26
+    title: 2026-09-26 M2 実機試験（MAC XX:XX:XX:XX:XX:XX、App 1.5.1、シリアルログ＋xiaozhi-server ログ）
 ---
 
 > `status: draft` の理由: ソースコードから読み取った内容で、実機・疑似デバイスでの通信確認をまだしていない。公式プロトコル文書（Feishu wiki）は未読。
@@ -75,9 +78,18 @@ sources:
 - xiaozhi-esp32-server の「設備呼叫」機能は、idle 端末を起こすために **ファームに `RemoteWakeup` MCP ツールを追加する改造** を要求している（xiaozhi-esp32 2.1.0〜2.2.6 対象）。= 無改造ファームではサーバーから会話を開始できないことの傍証。[^srv-devcall]
 - MQTT ゲートウェイ（`xinnan-tech/xiaozhi-mqtt-gateway`）の導入は未検討。
 
+# 実機のセッションの流れ（2026-09-26 観測）
+
+1. idle 中にウェイクワード検出 → `connecting` → WebSocket 接続 → hello 交換。
+2. 端末は `listen`/`start`（`mode: auto`）を送り `listening` へ。サーバーは MCP `initialize` → `tools/list` を送る。
+3. 発話は端末側 VAD で区切られ、サーバーが ASR → LLM → TTS。`tts start` で `speaking`、`tts stop` で再び `listening`（`mode: auto` なので自動で聞き続ける）。
+4. `handle_exit_intent` 等で終了すると `listening -> idle`。無音 `close_connection_no_voice_time`（120 秒）でもサーバーが切断する。
+
+- セッション中は `speaking` と `listening` を往復し続けるので、中継でサーバー発話を差し込む余地はこの間にある（[決定 007](/decisions/007-proactive-speech-path.md)）。[^m2-0926]
+
 # 自律発話への含意
 
-→ [決定 007（ドラフト）](/decisions/007-proactive-speech-path.md) を参照。
+→ [決定 007](/decisions/007-proactive-speech-path.md) を参照。
 
 [^xz-app-224]: xiaozhi-esp32 v2.2.4 application.cc
 [^xz-ws-224]: xiaozhi-esp32 v2.2.4 websocket_protocol.cc
@@ -85,3 +97,4 @@ sources:
 [^srv-types]: xiaozhi-esp32-server textMessageType.py
 [^srv-config]: xiaozhi-esp32-server config.yaml
 [^srv-devcall]: xiaozhi-esp32-server docs/device-call-guide.md
+[^m2-0926]: 2026-09-26 M2 実機試験

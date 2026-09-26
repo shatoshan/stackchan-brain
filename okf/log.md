@@ -1,6 +1,11 @@
 # Update Log
 
 ## 2026-09-26
+* **Verification**: human:shingo が首（右向き）と LED（青）の物理動作を確認。[端末MCPツール](/firmware/device-mcp-tools.md)、[ファーム書き込み](/runbooks/firmware-flash.md) に `verified` を記録。
+* **Decision**: [決定 007](/decisions/007-proactive-speech-path.md) を案 A（brain の WebSocket 中継）で確定し `stable` に。
+* **Milestone**: M2 達成（エージェント確認、`verified` は人間待ち）。ESP-IDF v5.5.4 を導入し、`OTA_URL` だけを `sdkconfig.defaults.local` で変えたファームを書き込み（事前に Flash 16MB をバックアップ）。実機が自前サーバーに接続し日本語で会話、首（`set_head_angles`）と LED（`set_led_color`）を LLM から操作できた。[ファーム書き込み](/runbooks/firmware-flash.md) を `stable` に。
+* **Correction**: 実機はウェイクワード検出時に `listen`/`detect` を送らない（`listen`/`start` のみ）。中国語「嘿，你好呀」の注入は実機では起きない。[公式ファーム](/firmware/official-firmware.md)、[xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md) を訂正。
+* **Update**: [端末MCPツール](/firmware/device-mcp-tools.md) に実機の 11 ツールと呼び出し結果、[XiaoZhi プロトコル](/protocol/xiaozhi-protocol.md) に実機のセッションの流れを追記。
 * **Update**: 中国向けのデフォルト設定を整理。サーバープラグインを `functions: []`、`wakeup_words` を `HiStackChan` ほか、ウェイクワード応答キャッシュ無効、`exit_commands` を日本語に。詳細と落とし穴は [xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md)「日本語で使う際の落とし穴」。
 * **Finding**: 本体が中国語の few-shot と「嘿，你好呀」を LLM に渡すため、Luna がウェイクワードに 5 回中 3 回中国語で返答。[llm-proxy](/services/llm-proxy.md) に完全一致の日本語置換を追加し 5/5 日本語に。
 * **Update**: [公式ファーム](/firmware/official-firmware.md) にウェイクワード（`wn9_histackchan_tts3`、`Hi,Stack Chan`）を追記。[GPT-6 Luna](/external/openai-gpt-6-luna.md) に function calling の実測を追記。

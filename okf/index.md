@@ -14,7 +14,7 @@ okf_version: "0.2"
 
 * [StackChan 公式ファームウェア](firmware/official-firmware.md) - firmware の構成・ビルド方法と、組み込まれた XiaoZhi エージェント部分。
 * [Kconfig（接続先設定）](firmware/kconfig.md) - 端末が接続するサーバーを決める OTA_URL と STACKCHAN_SERVER_URL。
-* [端末が公開する MCP ツール](firmware/device-mcp-tools.md) - 首・LED・リマインダーの MCP ツールと引数範囲。
+* [端末が公開する MCP ツール](firmware/device-mcp-tools.md) - 首・LED・リマインダーの MCP ツールと引数範囲、実機での呼び出し結果。（human-verified）
 
 # protocol — XiaoZhi プロトコル
 
@@ -45,11 +45,11 @@ okf_version: "0.2"
 * [004: Bedrock / Vertex は使わない](decisions/004-no-bedrock.md) - Anthropic API を直接使う。（deprecated → 008）
 * [005: Jev は Vercel AI Gateway 経由](decisions/005-jev-via-vercel-gateway.md) - TypeSafe 本家ではなく Vercel 経由。
 * [006: 知識管理は OKF v0.2](decisions/006-okf-for-knowledge.md) - 可視の okf/ に置き、docs/ は自由形式用。
-* [007: 自律発話を端末に届ける経路](decisions/007-proactive-speech-path.md) - 発話押し込み API が無いことを受けた候補と推奨。（draft・未決定）
+* [007: 自律発話は brain の WebSocket 中継で届ける](decisions/007-proactive-speech-path.md) - 発話押し込み API が無いため、中継から listen/detect を注入する。
 * [008: LLM は GPT-6 Luna、Gateway に統一](decisions/008-llm-via-vercel-gateway.md) - コスト効率とキー一本化。llm-proxy を挟む理由。
 
 # runbooks — 手順書
 
 * [xiaozhi-server の起動と疎通確認](runbooks/server-startup.md) - docker compose で起動し OTA と WebSocket を確認する。
 * [疑似デバイス](runbooks/simulator.md) - sim/text_client.py と py-xiaozhi で実機なしに会話を試す。（draft）
-* [ファームの OTA_URL 変更と書き込み](runbooks/firmware-flash.md) - M2 用。（draft・未実行）
+* [ファームの OTA_URL 変更と書き込み](runbooks/firmware-flash.md) - ESP-IDF 導入からバックアップ・書き込み・起動確認まで。（human-verified）

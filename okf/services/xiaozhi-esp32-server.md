@@ -61,6 +61,9 @@ sources:
   - id: run-0926b
     resource: process:claude-code-session-2026-09-26
     title: 2026-09-26 プラグイン・ウェイクワード整理後の疑似デバイス試験
+  - id: m2-0926
+    resource: process:claude-code-session-2026-09-26
+    title: 2026-09-26 M2 実機試験（MAC XX:XX:XX:XX:XX:XX、App 1.5.1、シリアルログ＋xiaozhi-server ログ）
   - id: ctx
     resource: https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/788f530/docs/context-provider-integration.md
     title: docs/context-provider-integration.md
@@ -170,6 +173,7 @@ TTS:
 ## ウェイクワード
 - `wakeup_words` は **句読点と空白を除いた完全一致** で照合される（`remove_punctuation_and_length`）。StackChan 端末は検出時に `Hi,Stack Chan` を送るので、`HiStackChan` を登録する（→ [公式ファーム](/firmware/official-firmware.md)）。[^intent]
 - 一致すると、`enable_greeting: true` なら本体が **固定の中国語「嘿，你好呀」をユーザー発話として LLM に渡す**（ハードコード）。
+  - ただし実機 StackChan はウェイクワード検出時にこの経路（`listen`/`detect` + テキスト）を使わないので、実機では発生しない（→ [公式ファーム](/firmware/official-firmware.md)）。疑似デバイスでテキストとしてウェイクワードを送った時だけ起きる。
   - 同じ文言を `stt` として端末にも送るので、**端末画面のユーザー発話欄に中国語が表示される**（2026-09-26 疑似デバイスで確認）。サーバー→端末の経路なので llm-proxy では直せない。[決定 007](/decisions/007-proactive-speech-path.md) の WebSocket 中継を入れるなら、そこで書き換えられる。[^run-0926b]
 - `enable_wakeup_words_response_cache: true`（デフォルト）だと、中国語の固定フレーズ（「我在这里哦！」等）を TTS したキャッシュ音声を返す。日本語の音声では意味をなさないので `false` にした。[^hello]
 
@@ -180,6 +184,7 @@ TTS:
 - 対処: [llm-proxy](/services/llm-proxy.md) で既知の固定文言だけを日本語に置換。置換後は 5 回中 5 回日本語。[^run-0926b]
 
 ## その他
+- FunASR（SenseVoiceSmall、CPU）は MacBook Air の Docker（arm64）で RTF 約 1.0（短い発話 1 回の認識に約 1.6 秒）。それでも実機での体感は「話し終わり→返答の音声開始」約 1.5 秒（端末側 VAD で発話終了を検出してから計測）。[^m2-0926]
 - `exit_commands` も句読点・空白除去後の完全一致。一致すると接続を閉じる。デフォルトは中国語（退出・关闭）。[^intent]
 - ツール実行時、本体は `{"type":"stt","text":"% <関数名>"}` を端末に送る（画面表示用で、読み上げはされない）。端末では「ユーザー発話」欄に表示される。[^tool-handler]
 
@@ -212,4 +217,5 @@ TTS:
 [^conn]: connection.py
 [^tool-handler]: unified_tool_handler.py
 [^run-0926b]: 2026-09-26 疑似デバイス試験
+[^m2-0926]: 2026-09-26 M2 実機試験
 [^prompt-mgr]: core/utils/prompt_manager.py

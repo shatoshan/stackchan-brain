@@ -63,5 +63,5 @@ docker compose down
 - **M0**: 骨格・CLAUDE.md・OKF 初期投入・xiaozhi-server 起動。
 - **M1**: LLM を GPT-6 Luna（Vercel AI Gateway 経由）にし、疑似デバイスで一往復。
 - **M2**: 実機の `OTA_URL` を自前に向けて書き込み、実機で会話・端末 MCP（首・LED）を確認。人間が `verified` を付ける。
-- **M3**: brain の Jev 判定ループ（LLM フォールバック付き）で自律発話・首振り・感情表現。evals に代表ケース。自律発話の経路は `okf/decisions/007-proactive-speech-path.md` を先に確定させる。
+- **M3**: brain の Jev 判定ループ（LLM フォールバック付き）で自律発話・首振り・感情表現。evals に代表ケース。自律発話は brain の WebSocket 中継で届ける（`okf/decisions/007-proactive-speech-path.md`）。
 - **M4**: option-quants を MCP で接続。常時稼働機へ移設。
