@@ -15,6 +15,7 @@ services:
       TZ: Asia/Tokyo
       SERVER_LAN_IP: ${SERVER_LAN_IP:?SERVER_LAN_IP を .env に設定してください}
       LLM_MODEL: ${LLM_MODEL:-openai/gpt-6-luna}
+      XIAOZHI_NO_VOICE_CLOSE_SEC: ${XIAOZHI_NO_VOICE_CLOSE_SEC:-600}
     depends_on:
       llm-proxy:
         condition: service_healthy
@@ -68,6 +69,7 @@ services:
       BRAIN_SESSION_LOG_DIR: /data/sessions
     ports:
       - "8010:8010"   # 端末からの WebSocket（LAN 内のみ）
+      - "127.0.0.1:8011:8011"   # 操作 API（/sessions、/say）。この Mac からだけ使う
     volumes:
       - ./data/brain:/data
     depends_on:

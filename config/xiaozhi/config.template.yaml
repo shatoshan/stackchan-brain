@@ -34,6 +34,13 @@ wakeup_words:
 # ウェイクワード応答キャッシュは中国語の固定フレーズを読み上げるので使わない
 enable_wakeup_words_response_cache: false
 
+# 無音がこの秒数続くとサーバーが切断する（デフォルト 120）。自律発話の検証のため .env で変えられるようにしている
+close_connection_no_voice_time: ${XIAOZHI_NO_VOICE_CLOSE_SEC}
+
+# 無音タイムアウトで切る時に LLM へ送るお別れ指示（デフォルトは中国語）。自律発話では不要なので切る
+end_prompt:
+  enable: false
+
 # 完全一致で接続を閉じる言葉（デフォルトは中国語）
 exit_commands:
   - 終了

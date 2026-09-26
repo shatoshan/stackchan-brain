@@ -1,7 +1,7 @@
 ---
 type: Service
 title: brain（端末 ⇔ xiaozhi-server の WebSocket 中継と自律発話）
-description: 端末の WebSocket セッションを xiaozhi-server へ透過中継し、会話を記録する。M3 で判定ループと発話注入を載せる土台。
+description: 端末の WebSocket セッションを xiaozhi-server へ中継して会話を記録し、操作 API から発話を差し込む。M3 の判定ループの土台。
 tags: [service, brain, relay, websocket]
 status: stable
 generated: { by: claude-code/opus-5.5, at: 2026-09-26T11:21:01Z }
@@ -15,12 +15,15 @@ sources:
   - id: m3-relay
     resource: process:claude-code-session-2026-09-26
     title: 2026-09-26 M3 ステップ1（中継）の疑似デバイス・実機試験
+  - id: m3-inject
+    resource: process:claude-code-session-2026-09-26
+    title: 2026-09-26 M3 ステップ2 差し込み試験（疑似デバイス・実機）
 ---
 
 # 役割
 
 - [決定 007](/decisions/007-proactive-speech-path.md) の案 A。xiaozhi-server の `server.websocket` を brain（`ws://<LAN IP>:8010/xiaozhi/v1/`）に向けると、端末は OTA 経由で brain に繋ぎ、brain が `ws://xiaozhi-server:8000/xiaozhi/v1/` へ中継する。[^code]
-- 現在（ステップ1）は **透過中継と記録だけ**。メッセージは改変しない。発話の注入と判定ループは次のステップで追加する。
+- ステップ1で透過中継と記録、ステップ2で発話の差し込み（操作 API）を実装。判定ループは次のステップ。
 
 # 動作
 
@@ -30,11 +33,31 @@ sources:
 - 標準ログには発話（`user:`）、返答（`robot:`）、ツール呼び出し、hello / listen / abort を要約して出す。[^code]
 - ポート 8010 は LAN に公開する（端末が直接繋ぐため）。`GET /healthz` でヘルスチェック。
 
+# 発話の差し込み（操作 API、ポート 8011）
+
+- ホストの `127.0.0.1:8011` にだけ公開（LAN からは使えない）。[^code]
+- `GET /sessions`: 中継中のセッション一覧。`state`（connecting / listening / speaking / idle）、`since_user_s`、`since_robot_s`、`injections` を返す。
+- `POST /say` `{"text", "mode", "device_id"?}`: 聞き取り中のセッション（`device_id` 省略時は最後に動いたもの）の上流へ `listen`/`detect` を送る。
+  - `mode: "verbatim"`: `[device_call]` 接頭辞付き。xiaozhi-server は LLM を通さずそのまま TTS し、会話履歴に assistant 発話として残す。
+  - `mode: "llm"`: text をユーザー発話として渡し、LLM が返答を生成する（履歴には user として残る）。`wakeup_words` / `exit_commands` と一致する文は拒否（`BRAIN_RESERVED_WORDS`）。
+  - 状態が `listening` でない、ロボット発話終了から 1.5 秒以内、ユーザー発話から 3 秒以内なら 409 で拒否（`BRAIN_MIN_GAP_AFTER_ROBOT` / `BRAIN_MIN_GAP_AFTER_USER`）。
+- 差し込んだ文についてサーバーが返す `stt` は端末に流さない（画面の「ユーザー発話」欄に指示文が出るのを防ぐ）。サーバーは `stt` の句読点を一部落とすので、句読点・空白を除いて照合する。[^code]
+- 状態の推定: 上り `listen start` → listening、下り `tts start` → speaking、`tts stop` → listening。`stt` のうち `% ` で始まるもの（ツール実行表示）はユーザー発話に数えない。
+
+```bash
+curl -s 127.0.0.1:8011/sessions
+curl -s -X POST 127.0.0.1:8011/say -d '{"text":"ねえねえ、今日はいい天気だね。"}'
+curl -s -X POST 127.0.0.1:8011/say -d '{"mode":"llm","text":"（ロボットから話しかける場面です。…を短く聞いてください）"}'
+```
+
 # 実測（2026-09-26）
 
 - 実機: AI Agent を開き直すと OTA で新しい URL を受け取り、brain 経由で接続した。「左を向いて」→ `get_head_angles` → `set_head_angles(yaw=-40, pitch=14)` を含め、会話もツール呼び出しも中継前と同様に動いた。[^m3-relay]
 - 遅延: 発話の認識結果（`stt`）から最初の返答文まで約 1.6 秒で、中継前と体感差なし。[^m3-relay]
+- 差し込み（実機）: verbatim は差し込みから約 0.5 秒で読み上げ開始。差し込んだ文を踏まえてユーザーとの会話が続いた（「ぼく、自分から話しかけられるようになったよ」→「マじか？」→「ほんとだよ…」）。llm モードの指示「今日の予定を一つ短く聞いて」には「今日の予定、ひとつ聞いてもいい？」と許可を求める形で返った（指示文の書き方の課題）。[^m3-inject]
+- 疑似デバイスで、発話中の連続差し込みが 409（device is speaking）、予約語が 409 になることを確認。[^m3-inject]
 
 [^code]: brain/relay.py
 [^decision]: 決定 007
 [^m3-relay]: 2026-09-26 M3 ステップ1 試験
+[^m3-inject]: 2026-09-26 M3 ステップ2 差し込み試験

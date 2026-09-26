@@ -1,16 +1,34 @@
-"""brain のエントリポイント。現時点では端末 ⇔ xiaozhi-server の中継だけを起動する。"""
+"""brain のエントリポイント。端末 ⇔ xiaozhi-server の中継（8010）と操作 API（8011）を起動する。"""
 
+import asyncio
 import logging
 import os
 
 from aiohttp import web
 
-from relay import create_app
+from relay import create_app, create_control_app
+
+
+async def serve() -> None:
+    relay_app = create_app()
+    control_app = create_control_app(relay_app["relay"])
+    runners = []
+    for app, port in ((relay_app, int(os.environ.get("BRAIN_PORT", "8010"))),
+                      (control_app, int(os.environ.get("BRAIN_CONTROL_PORT", "8011")))):
+        runner = web.AppRunner(app)
+        await runner.setup()
+        await web.TCPSite(runner, "0.0.0.0", port).start()
+        runners.append(runner)
+    try:
+        await asyncio.Event().wait()
+    finally:
+        for runner in runners:
+            await runner.cleanup()
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
-    web.run_app(create_app(), host="0.0.0.0", port=int(os.environ.get("BRAIN_PORT", "8010")), print=None)
+    asyncio.run(serve())
 
 
 if __name__ == "__main__":

@@ -23,6 +23,24 @@ log = logging.getLogger("brain.relay")
 FORWARD_HEADERS = ("authorization", "protocol-version", "device-id", "client-id")
 # ログで省略する大きなペイロード
 MAX_LOGGED_CHARS = 2000
+# xiaozhi-server が LLM を通さずそのまま読み上げる接頭辞（listenMessageHandler.py）
+VERBATIM_PREFIX = "[device_call]"
+# 差し込みの条件（秒）
+MIN_GAP_AFTER_ROBOT = float(os.environ.get("BRAIN_MIN_GAP_AFTER_ROBOT", "1.5"))
+MIN_GAP_AFTER_USER = float(os.environ.get("BRAIN_MIN_GAP_AFTER_USER", "3.0"))
+# llm モードで送ってはいけない語（wakeup_words / exit_commands と完全一致すると誤動作する）
+RESERVED_WORDS = {w for w in os.environ.get(
+    "BRAIN_RESERVED_WORDS", "HiStackChan,スタックチャン,ハイスタックチャン,終了,おしまい").split(",") if w}
+PUNCT = set("！＂＃＄％＆＇（）＊＋，－。／：；＜＝＞？＠［＼］＾＿｀｛｜｝～" + "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~" + " 　")
+
+
+def normalize(text: str) -> str:
+    """xiaozhi-server の remove_punctuation_and_length と同じ正規化。"""
+    return "".join(c for c in text if c not in PUNCT)
+
+
+class InjectError(Exception):
+    """差し込めない（状態が合わない等）。"""
 
 
 @dataclass
@@ -35,6 +53,23 @@ class Session:
     log_path: Path
     session_id: str | None = None  # xiaozhi-server が hello で払い出す ID
     last_activity: float = field(default_factory=time.time)
+    # 端末の状態（メッセージから推定）: connecting / listening / speaking / idle
+    state: str = "connecting"
+    last_user_at: float = 0.0      # 最後にユーザー発話（stt）が届いた時刻
+    last_robot_end_at: float = 0.0  # 最後に tts stop が届いた時刻
+    injections: int = 0
+    # 差し込んだ文の stt は端末に流さない（画面に「ユーザー発話」として出るのを防ぐ）
+    suppress_stt: set = field(default_factory=set)
+
+    def info(self) -> dict:
+        now = time.time()
+        return {
+            "id": self.id, "device_id": self.device_id, "session_id": self.session_id,
+            "state": self.state, "age_s": round(now - self.started_at),
+            "since_user_s": round(now - self.last_user_at) if self.last_user_at else None,
+            "since_robot_s": round(now - self.last_robot_end_at) if self.last_robot_end_at else None,
+            "injections": self.injections,
+        }
 
 
 class Relay:
@@ -78,17 +113,77 @@ class Relay:
         elif mtype in ("hello", "listen", "abort"):
             log.info("[%s] %s %s", session.device_id, direction, json.dumps(msg, ensure_ascii=False))
 
+    @staticmethod
+    def _track_state(session: Session, direction: str, data: dict) -> None:
+        mtype, state = data.get("type"), data.get("state")
+        now = time.time()
+        if direction == "up" and mtype == "listen":
+            if state == "start":
+                session.state = "listening"
+            elif state == "stop":
+                session.state = "idle"
+        elif direction == "down" and mtype == "tts":
+            if state == "start":
+                session.state = "speaking"
+            elif state == "stop":
+                session.state = "listening"
+                session.last_robot_end_at = now
+        elif direction == "down" and mtype == "stt" and not str(data.get("text", "")).startswith("% "):
+            session.last_user_at = now
+
+    async def inject(self, text: str, mode: str = "verbatim", device_id: str | None = None) -> dict:
+        """聞き取り中のセッションに発話を差し込む。
+
+        verbatim: [device_call] 接頭辞で LLM を通さずそのまま読み上げる
+        llm:      text をユーザー発話として渡し、LLM に返答を生成させる（会話履歴に user として残る）
+        """
+        text = text.strip()
+        if not text:
+            raise InjectError("text is empty")
+        if mode not in ("verbatim", "llm"):
+            raise InjectError(f"unknown mode: {mode}")
+        if mode == "llm" and normalize(text) in RESERVED_WORDS:
+            raise InjectError("text matches a wake word / exit command")
+        candidates = [s for s in self.sessions.values() if device_id in (None, s.device_id)]
+        if not candidates:
+            raise InjectError("no active session")
+        session = max(candidates, key=lambda s: s.last_activity)
+        now = time.time()
+        if session.state != "listening" or not session.session_id:
+            raise InjectError(f"device is {session.state}")
+        if session.last_robot_end_at and now - session.last_robot_end_at < MIN_GAP_AFTER_ROBOT:
+            raise InjectError("robot just finished speaking")
+        if session.last_user_at and now - session.last_user_at < MIN_GAP_AFTER_USER:
+            raise InjectError("user just spoke")
+
+        payload_text = VERBATIM_PREFIX + text if mode == "verbatim" else text
+        # サーバーが返す stt（verbatim は接頭辞を除いた文、llm はそのまま）を端末に流さない
+        session.suppress_stt.add(normalize(text))
+        msg = {"session_id": session.session_id, "type": "listen", "state": "detect", "text": payload_text}
+        await session.upstream_ws.send_str(json.dumps(msg, ensure_ascii=False))
+        session.injections += 1
+        self._record(session, "inject", {"mode": mode, "text": text})
+        log.info("[%s] inject(%s): %s", session.device_id, mode, text)
+        return session.info()
+
     async def _pump(self, session: Session, source, sink, direction: str) -> str:
         """source から sink へ流し続け、source 側が閉じたら direction を返す。"""
         async for msg in source:
             session.last_activity = time.time()
             if msg.type == WSMsgType.TEXT:
-                await sink.send_str(msg.data)
                 try:
                     data = json.loads(msg.data)
                 except json.JSONDecodeError:
+                    await sink.send_str(msg.data)
                     self._record(session, direction, msg.data)
                     continue
+                # サーバーは stt の句読点を一部落とすので正規化して比べる
+                if direction == "down" and data.get("type") == "stt" and normalize(str(data.get("text", ""))) in session.suppress_stt:
+                    session.suppress_stt.discard(normalize(str(data["text"])))
+                    self._record(session, "down-suppressed", data)
+                    continue
+                await sink.send_str(msg.data)
+                self._track_state(session, direction, data)
                 if direction == "down" and data.get("type") == "hello" and data.get("session_id"):
                     session.session_id = data["session_id"]
                 self._record(session, direction, data)
@@ -143,6 +238,26 @@ class Relay:
             self._record(session, "meta", {"type": "closed", "by": closed_by, "code": code})
             log.info("[%s] session %s closed by %s (code %s, %.0fs)", device_id, sid, closed_by, code, time.time() - started)
         return device_ws
+
+
+def create_control_app(relay: Relay) -> web.Application:
+    """ホスト（127.0.0.1）からだけ使う操作 API。"""
+
+    async def sessions(_: web.Request) -> web.Response:
+        return web.json_response([s.info() for s in relay.sessions.values()])
+
+    async def say(request: web.Request) -> web.Response:
+        body = await request.json()
+        try:
+            info = await relay.inject(body.get("text", ""), body.get("mode", "verbatim"), body.get("device_id"))
+        except InjectError as e:
+            return web.json_response({"ok": False, "error": str(e)}, status=409)
+        return web.json_response({"ok": True, "session": info})
+
+    app = web.Application()
+    app.router.add_get("/sessions", sessions)
+    app.router.add_post("/say", say)
+    return app
 
 
 def create_app() -> web.Application:
