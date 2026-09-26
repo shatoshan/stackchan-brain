@@ -29,6 +29,8 @@ INTERVAL = float(os.environ.get("BRAIN_JUDGE_INTERVAL", "5"))
 # ルールによる足切り（秒・回数）
 QUIET_AFTER_USER = float(os.environ.get("BRAIN_QUIET_AFTER_USER", "20"))
 QUIET_AFTER_ROBOT = float(os.environ.get("BRAIN_QUIET_AFTER_ROBOT", "20"))
+# まだ誰も話していないセッション（ウェイクワードや近接センサで開いた直後）は早めに判定する
+QUIET_AFTER_OPEN = float(os.environ.get("BRAIN_QUIET_AFTER_OPEN", "5"))
 MIN_INJECTION_GAP = float(os.environ.get("BRAIN_MIN_INJECTION_GAP", "60"))
 MAX_INJECTIONS_PER_SESSION = int(os.environ.get("BRAIN_MAX_INJECTIONS_PER_SESSION", "4"))
 # Jev が落ちている時の扱い: 一定時間 Jev を呼ばず（指数的に延長）、LLM 判定も間引く
@@ -168,7 +170,10 @@ class Judge:
         now = time.time()
         if session.state != "listening" or not session.session_id:
             return f"state={session.state}"
-        if now - max(session.last_user_at, session.started_at) < QUIET_AFTER_USER:
+        if not session.transcript:
+            if now - session.started_at < QUIET_AFTER_OPEN:
+                return "just_opened"
+        elif now - max(session.last_user_at, session.started_at) < QUIET_AFTER_USER:
             return "user_recent"
         if session.last_robot_end_at and now - session.last_robot_end_at < QUIET_AFTER_ROBOT:
             return "robot_recent"

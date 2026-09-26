@@ -37,6 +37,7 @@ okf_version: "0.2"
 
 * [3層アーキテクチャ](design/three-layer-architecture.md) - 反射（端末）/ 直感（Jev）/ 熟考（GPT-6 Luna）に役割と時間スケールを分ける全体設計。
 * [状態ブロブ仕様](design/state-blob.md) - 直感層に毎周期渡す固定フォーマット JSON。（draft）
+* [カメラで在席を知る](design/camera-presence.md) - ファーム無改変で使えるカメラ経路の調査。take_photo の送り先を brain に向ける案。（draft）
 * [直感層の質問設計](design/jev-questions.md) - Jev に状況を分類させる理由、ルール・閾値との分担、evals。（draft）
 
 # decisions — 決定記録
@@ -49,6 +50,7 @@ okf_version: "0.2"
 * [006: 知識管理は OKF v0.2](decisions/006-okf-for-knowledge.md) - 可視の okf/ に置き、docs/ は自由形式用。
 * [007: 自律発話は brain の WebSocket 中継で届ける](decisions/007-proactive-speech-path.md) - 発話押し込み API が無いため、中継から listen/detect を注入する。
 * [008: LLM は GPT-6 Luna、Gateway に統一](decisions/008-llm-via-vercel-gateway.md) - コスト効率とキー一本化。llm-proxy を挟む理由。
+* [009: 近接センサで会話を開くファームパッチ](decisions/009-firmware-proximity-wake.md) - センサが数 cm しか検知できず不採用。（deprecated）
 
 # runbooks — 手順書
 

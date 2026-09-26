@@ -49,6 +49,11 @@ sources:
 - M5Burner は公式ビルド済みイメージを書き込む手段で、自前設定（`OTA_URL` 変更）を入れるには自分でビルドする必要がある。
 - `firmware/sdkconfig.defaults.local` が存在すると `sdkconfig.defaults` に重ねて適用される（CMakeLists.txt が自動で `SDKCONFIG_DEFAULTS` に追加）。**追跡ファイルを書き換えずに `OTA_URL` を上書きする正規の口**。[^fw-cmake] 手順は [ファーム書き込み](/runbooks/firmware-flash.md)。
 
+# stackchan-brain のパッチ
+
+- 近接センサ（LTR-553）は公式ファームでは未使用。パッチで使う案（[決定 009](/decisions/009-firmware-proximity-wake.md)）は検知距離が数 cm で不採用。現在パッチは当てていない。
+- カメラは AI Agent 起動時に初期化され取り込みは動いているが、端末上の解析は無く、`take_photo` の時だけ 1 枚送る（→ [カメラで在席を知る](/design/camera-presence.md)）。
+
 # AI エージェント部分
 
 - `78/xiaozhi-esp32` を **v2.2.4** で取得し、`patches/xiaozhi-esp32.patch` を当てて組み込む。[^repos-json]

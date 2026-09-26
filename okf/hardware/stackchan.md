@@ -38,6 +38,10 @@ sources:
 
 [^stackchan-readme]
 
+# 実測メモ
+
+- 近接センサ（LTR-553）は StackChan に組み込んだ状態で、手のひら 3cm で 380〜630、顔 20〜50cm は背景（40 前後）とほぼ区別できない。人の在席検知には使えない（→ [決定 009](/decisions/009-firmware-proximity-wake.md)）。
+
 # このプロジェクトでの意味
 
 - デュアルマイクは xiaozhi-esp32 の AEC / リモートウェイク系機能の前提条件になっている（→ [xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md)）。

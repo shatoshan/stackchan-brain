@@ -1,0 +1,168 @@
+diff --git a/firmware/main/hal/hal.cpp b/firmware/main/hal/hal.cpp
+index 3ca8a14..c482d26 100644
+--- a/firmware/main/hal/hal.cpp
++++ b/firmware/main/hal/hal.cpp
+@@ -176,6 +176,9 @@ static void _stackchan_update_task(void* param)
+     }
+ }
+ 
++// stackchan-brain: hal_proximity.cpp
++void hal_start_proximity_wake();
++
+ void Hal::startXiaozhi()
+ {
+     mclog::tagInfo(_tag, "start xiaozhi");
+@@ -199,6 +202,9 @@ void Hal::startXiaozhi()
+     // Start stackchan update task
+     xTaskCreatePinnedToCore(_stackchan_update_task, "stackchan", 4096, NULL, 3, NULL, 1);
+ 
++    // stackchan-brain: 近接センサで人が近くに居続けたら会話を開く（start_xiaozhi_app は戻らないので先に起動）
++    hal_start_proximity_wake();
++
+     hal_bridge::start_xiaozhi_app();
+ }
+ 
+diff --git a/firmware/main/hal/hal_proximity.cpp b/firmware/main/hal/hal_proximity.cpp
+new file mode 100644
+index 0000000..07cd5e3
+--- /dev/null
++++ b/firmware/main/hal/hal_proximity.cpp
+@@ -0,0 +1,138 @@
++/*
++ * stackchan-brain: proximity wake (LTR-553 on CoreS3)
++ *
++ * AI Agent が待機中（未接続）のとき、近接センサで人が近くに居続けたら
++ * 頭タッチと同じ経路で会話セッションを開く。以降の「何を話すか」はサーバー側（brain）が決める。
++ * 根拠: stackchan-brain okf/decisions/009-firmware-proximity-wake.md
++ */
++#include "board/hal_bridge.h"
++#include <mooncake_log.h>
++#include <driver/i2c_master.h>
++#include <freertos/FreeRTOS.h>
++#include <freertos/task.h>
++#include <esp_timer.h>
++
++static const std::string_view _tag = "HAL-Proximity";
++
++// LTR-553ALS（M5Unified LTR553_Class と同じレジスタ）
++static constexpr uint8_t LTR553_ADDR        = 0x23;
++static constexpr uint8_t REG_PS_CONTR       = 0x81;  // 0x03: PS active
++static constexpr uint8_t REG_PS_MEAS_RATE   = 0x84;  // 0x00: 50ms
++static constexpr uint8_t REG_PART_ID        = 0x86;  // 0x92
++static constexpr uint8_t REG_MANUFAC_ID     = 0x87;  // 0x05
++static constexpr uint8_t REG_PS_DATA_0      = 0x8D;  // 11bit: DATA_0 | (DATA_1 & 0x07) << 8
++
++// 判定パラメータ（テスト用。実機で近接値を見て調整する）
++static constexpr uint16_t NEAR_THRESHOLD    = 120;    // これ以上で「近い」
++static constexpr uint16_t FAR_THRESHOLD     = 60;     // これ未満で「離れた」（ヒステリシス）
++static constexpr int64_t TRIGGER_MS         = 10000;  // 近い状態がこれだけ続いたら会話を開く
++static constexpr int64_t REARM_FAR_MS       = 3000;   // 一度開いたら、これだけ離れるまで再発動しない
++static constexpr int64_t POLL_MS            = 200;
++static constexpr int64_t LOG_INTERVAL_MS    = 2000;   // 調整用に近接値をログに出す間隔（0 で出さない）
++
++static i2c_master_dev_handle_t _dev = nullptr;
++
++static bool write_reg(uint8_t reg, uint8_t value)
++{
++    uint8_t buf[2] = {reg, value};
++    return i2c_master_transmit(_dev, buf, 2, 100) == ESP_OK;
++}
++
++static bool read_regs(uint8_t reg, uint8_t* out, size_t len)
++{
++    return i2c_master_transmit_receive(_dev, &reg, 1, out, len, 100) == ESP_OK;
++}
++
++static bool ltr553_init()
++{
++    auto bus = hal_bridge::board_get_i2c_bus();
++    if (bus == nullptr || i2c_master_probe(bus, LTR553_ADDR, 100) != ESP_OK) {
++        mclog::tagWarn(_tag, "LTR-553 not found at 0x{:02x}", LTR553_ADDR);
++        return false;
++    }
++    i2c_device_config_t cfg = {};
++    cfg.dev_addr_length     = I2C_ADDR_BIT_LEN_7;
++    cfg.device_address      = LTR553_ADDR;
++    cfg.scl_speed_hz        = 400000;
++    if (i2c_master_bus_add_device(bus, &cfg, &_dev) != ESP_OK) {
++        mclog::tagWarn(_tag, "add device failed");
++        return false;
++    }
++    uint8_t ids[2] = {0, 0};
++    if (!read_regs(REG_PART_ID, ids, 2) || ids[0] != 0x92 || ids[1] != 0x05) {
++        mclog::tagWarn(_tag, "unexpected id: part=0x{:02x} manufac=0x{:02x}", ids[0], ids[1]);
++        return false;
++    }
++    bool ok = write_reg(REG_PS_MEAS_RATE, 0x00) && write_reg(REG_PS_CONTR, 0x03);
++    mclog::tagInfo(_tag, "LTR-553 ready: {}", ok);
++    return ok;
++}
++
++static bool read_ps(uint16_t& value)
++{
++    uint8_t buf[2];
++    if (!read_regs(REG_PS_DATA_0, buf, 2)) {
++        return false;
++    }
++    value = static_cast<uint16_t>(buf[0] | ((buf[1] & 0x07) << 8));
++    return true;
++}
++
++static void proximity_task(void*)
++{
++    // I2C バスは XiaoZhi のボード初期化で作られるので、準備完了を待つ
++    while (!hal_bridge::is_xiaozhi_ready()) {
++        vTaskDelay(pdMS_TO_TICKS(500));
++    }
++    if (!ltr553_init()) {
++        vTaskDelete(NULL);
++        return;
++    }
++    bool near            = false;
++    bool armed           = true;
++    int64_t near_since   = 0;
++    int64_t far_since    = 0;
++    int64_t last_log     = 0;
++
++    while (true) {
++        vTaskDelay(pdMS_TO_TICKS(POLL_MS));
++        uint16_t ps = 0;
++        if (!read_ps(ps)) {
++            continue;
++        }
++        int64_t now = esp_timer_get_time() / 1000;
++
++        if (!near && ps >= NEAR_THRESHOLD) {
++            near       = true;
++            near_since = now;
++        } else if (near && ps < FAR_THRESHOLD) {
++            near      = false;
++            far_since = now;
++        }
++        if (!near && !armed && now - far_since >= REARM_FAR_MS) {
++            armed = true;
++            mclog::tagInfo(_tag, "re-armed (ps={})", ps);
++        }
++        if (LOG_INTERVAL_MS > 0 && now - last_log >= LOG_INTERVAL_MS) {
++            last_log = now;
++            mclog::tagInfo(_tag, "ps={} near={} armed={} idle={}", ps, near, armed, hal_bridge::is_xiaozhi_idle());
++        }
++
++        // 待機中（会話していない）に近い状態が続いたら会話を開く
++        bool idle = hal_bridge::is_xiaozhi_ready() && hal_bridge::is_xiaozhi_idle();
++        if (!idle) {
++            near_since = now;  // 会話中は計測し直す
++            continue;
++        }
++        if (armed && near && now - near_since >= TRIGGER_MS) {
++            mclog::tagInfo(_tag, "person nearby for {}ms, opening chat (ps={})", now - near_since, ps);
++            armed = false;
++            hal_bridge::toggle_xiaozhi_chat_state();
++        }
++    }
++}
++
++void hal_start_proximity_wake()
++{
++    xTaskCreatePinnedToCore(proximity_task, "proximity", 4096, NULL, 2, NULL, 1);
++}
