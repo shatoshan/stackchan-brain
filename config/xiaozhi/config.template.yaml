@@ -37,6 +37,12 @@ enable_wakeup_words_response_cache: false
 # 無音がこの秒数続くとサーバーが切断する（デフォルト 120）。自律発話の検証のため .env で変えられるようにしている
 close_connection_no_voice_time: ${XIAOZHI_NO_VOICE_CLOSE_SEC}
 
+# 発話の終わりとみなす無音の長さ（ミリ秒）。本体の既定 200 では日本語の息継ぎや言いよどみで文が細切れになる
+# （2026-09-27 実機）。長くすると、話し終えてから返事が始まるまでもその分遅れる
+VAD:
+  SileroVAD:
+    min_silence_duration_ms: ${XIAOZHI_VAD_SILENCE_MS}
+
 # 無音タイムアウトで切る時に LLM へ送るお別れ指示（デフォルトは中国語）。自律発話では不要なので切る
 end_prompt:
   enable: false

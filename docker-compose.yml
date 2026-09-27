@@ -16,6 +16,7 @@ services:
       SERVER_LAN_IP: ${SERVER_LAN_IP:?SERVER_LAN_IP を .env に設定してください}
       LLM_MODEL: ${LLM_MODEL:-openai/gpt-6-luna}
       XIAOZHI_NO_VOICE_CLOSE_SEC: ${XIAOZHI_NO_VOICE_CLOSE_SEC:-600}
+      XIAOZHI_VAD_SILENCE_MS: ${XIAOZHI_VAD_SILENCE_MS:-700}
     depends_on:
       llm-proxy:
         condition: service_healthy

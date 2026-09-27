@@ -67,6 +67,12 @@ sources:
   - id: ctx
     resource: https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/788f530/docs/context-provider-integration.md
     title: docs/context-provider-integration.md
+  - id: vad
+    resource: https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/788f530/main/xiaozhi-server/core/providers/vad/silero.py
+    title: core/providers/vad/silero.py（server_0.9.6 イメージ内で確認）
+  - id: run-0927
+    resource: process:claude-code-session-2026-09-27
+    title: 2026-09-27 常時セッションの実機試験
 ---
 
 # 位置づけ
@@ -144,6 +150,12 @@ ASR:
     language: auto   # SenseVoice は zh, en, ja, ko, yue に対応。日本語固定なら ja
 ```
 [^config]
+
+## VAD（発話の区切り）
+
+- `VAD.SileroVAD`: 音声確率が `threshold`（0.5）以上で有声、`threshold_low`（0.3）以下で無声、その間は直前の状態を引き継ぐ。有声が続いた後、最後の有声から `min_silence_duration_ms` 以上無声が続くと 1 発話の終わりとして ASR に回す。[^vad]
+- 本体の `config.yaml` の既定は **200 ms**（コード側の既定は 1000）。日本語の息継ぎ・言いよどみで文が細切れに認識された（「てしだ」「ゃんてに行ってないよ」など途中から始まる断片、2026-09-27 実機）。[^run-0927]
+- `data/.config.yaml` の上書きは再帰マージなので、`VAD.SileroVAD.min_silence_duration_ms` だけ書けばよい（`XIAOZHI_VAD_SILENCE_MS`、既定 700）。長くすると話し終えてから返事が始まるまでもその分遅れる。**実機での効果は未確認**。
 
 ## TTS（EdgeTTS）
 
@@ -223,3 +235,5 @@ TTS:
 [^run-0926b]: 2026-09-26 疑似デバイス試験
 [^m2-0926]: 2026-09-26 M2 実機試験
 [^prompt-mgr]: core/utils/prompt_manager.py
+[^vad]: core/providers/vad/silero.py
+[^run-0927]: 2026-09-27 常時セッションの実機試験

@@ -1,6 +1,7 @@
 # Update Log
 
 ## 2026-09-27
+* **Update**: 発話が細切れに認識される原因は VAD の無音 200 ms（本体の既定）。`XIAOZHI_VAD_SILENCE_MS`（既定 700）で上書きできるように。[xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md)。
 * **Update**: human:shingo が宛先ゲートの実機記録 48 件にラベル。71 件 × 3 回で閾値 0.75〜0.85 が 66/71 の横ばいとなり、0.8 を維持。残る誤りは聞き取りの崩れたロボット宛て発話で、閾値では直らない。[宛先ゲート](/design/addressee-gate.md)。
 * **Update**: 宛先ゲートの閾値を実データで調整する仕組み（#14）。`evals/gate_label.py`（ラベル付け）、`evals/gate_sweep.py`（閾値の探索、Jev の答えを貯めて再計算）、llm-proxy の `/gate/decide`。23 件 × 3 回で 0.85 が 23/23、0.80 は 22/23。[宛先ゲート](/design/addressee-gate.md)。
 * **Decision**: 宛先ゲートで止めた発話も会話履歴に残す（human:shingo。独り言の後で話を振られることがあるため）。修正後 13 分の実機試験で暴走は再発せず、ゲートは 16 件を止め 6 件を通した。音声認識の崩れ（#14）と自発発話の質（#6）は残課題。[宛先ゲート](/design/addressee-gate.md)、[決定 012](/decisions/012-firmware-always-on-session.md)。
