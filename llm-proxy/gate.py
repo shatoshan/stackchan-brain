@@ -25,8 +25,9 @@ log = logging.getLogger("llm-proxy.gate")
 ENABLED = os.environ.get("LLM_GATE_ENABLED", "1") == "1"
 BRAIN_URL = os.environ.get("BRAIN_CONTROL_URL", "http://brain:8011")
 MIN_CONFIDENCE = float(os.environ.get("LLM_GATE_MIN_CONFIDENCE", "0.6"))
-# ロボット宛ての確率がこれ未満なら止める候補（2026-09-27 の 14 ケースで決めた暫定値）
-ROBOT_MIN = float(os.environ.get("LLM_GATE_ROBOT_MIN", "0.5"))
+# ロボット宛ての確率がこれ未満なら止める候補。2026-09-27 の実機試験で、家族向けの発話が 0.62〜0.77、
+# ロボット宛ての発話が 0.89〜0.97 だったので 0.8（human:shingo の判断）
+ROBOT_MIN = float(os.environ.get("LLM_GATE_ROBOT_MIN", "0.8"))
 RECORD_DIR = Path(os.environ.get("LLM_GATE_RECORD_DIR", "/data/gate"))
 BACKCHANNELS = ["うんうん。", "そっか。", "なるほどね。", "へえ。", "うん。"]
 # brain が llm モードで差し込む指示（ロボットからの話しかけ）はゲートしない
@@ -158,8 +159,14 @@ async def classify(session: ClientSession, state: dict) -> dict:
     # （「お母さん、醤油取って」は人宛ての頼みごとで action と分類される）
     if p_robot < ROBOT_MIN and p_other > probs.get("unclear", 0.0):
         decision = "drop"
-    elif who == "robot" and kind in ("backchannel", "none") and kind_p >= MIN_CONFIDENCE:
-        decision, reply = "backchannel", random.choice(BACKCHANNELS)
+    elif who == "robot" and kind == "none" and kind_p >= MIN_CONFIDENCE:
+        # 相手の相槌（「へえ」「うん」）などに相槌で返すと不自然なので黙る
+        decision = "drop"
+    elif who == "robot" and kind == "backchannel" and kind_p >= MIN_CONFIDENCE:
+        # 相手と同じ言葉を返さない（「へえ」に「へえ」と返していた）
+        spoken = state["utterance"].strip("。、！？!? ")
+        choices = [b for b in BACKCHANNELS if b.strip("。") != spoken] or BACKCHANNELS
+        decision, reply = "backchannel", random.choice(choices)
     entry.update(decision=decision, reply=reply, addressee=who, addressee_p=round(who_p, 3), p_robot=round(p_robot, 3), response=kind,
                  response_p=round(kind_p, 3), backend=res["backend"], latency_s=round(time.time() - started, 3), raw=a)
     return entry

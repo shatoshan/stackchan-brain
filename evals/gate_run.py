@@ -1,12 +1,14 @@
 """宛先ゲート（llm-proxy/gate.py）の evals。evals/gate_cases.jsonl を流し、期待と比べる。
 
     docker compose exec -T brain python /evals/gate_run.py
+    docker compose exec -T brain python /evals/gate_run.py --cases /data/evals/gate_labeled.jsonl   # 実機からラベル付けしたもの（ローカル）
 
 判定器を 2 つ並べる:
 - rule: 名前で呼ばれた／ロボットが直前（20 秒以内）に話した → pass、それ以外 → drop（ベースライン）
 - jev:  llm-proxy の /gate/classify（Jev が 429 等で使えない時は「--」）
 cases の 1 行: {"id", "expect": ["pass" | "drop" | "backchannel", ...], "state": ゲートの状態ブロブ}
 """
+import argparse
 import json
 import time
 import urllib.error
@@ -33,8 +35,11 @@ def jev(st: dict) -> dict | None:
     return None
 
 
+ap = argparse.ArgumentParser()
+ap.add_argument("--cases", default="/evals/gate_cases.jsonl")
+args = ap.parse_args()
 score = {"rule": [0, 0], "jev": [0, 0]}
-for line in open("/evals/gate_cases.jsonl"):
+for line in open(args.cases):
     if not line.strip():
         continue
     c = json.loads(line)
