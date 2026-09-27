@@ -16,6 +16,7 @@ from aiohttp import ClientSession, ClientTimeout, web
 
 import gate
 import jev
+from speech_filter import SpeechFilter
 from rewrites import FEWSHOT_ID_PREFIX, REWRITES, SUBSTRING_REWRITES
 
 UPSTREAM = os.environ.get("LLM_PROXY_UPSTREAM", "https://ai-gateway.vercel.sh").rstrip("/")
@@ -24,6 +25,8 @@ REASONING_EFFORT = os.environ.get("LLM_REASONING_EFFORT", "none")
 PORT = int(os.environ.get("LLM_PROXY_PORT", "8080"))
 # デバッグ用: 1 ならリクエスト本文（messages / tools）をログに出す。会話内容が残るので常用しない
 LOG_BODY = os.environ.get("LLM_PROXY_LOG_BODY") == "1"
+# 返答の本文から英語の独り言を取り除く（speech_filter.py）。0 で無効
+FILTER_ENABLED = os.environ.get("LLM_PROXY_SPEECH_FILTER", "1") == "1"
 
 # 上流へそのまま渡さないヘッダ
 HOP_HEADERS = {"host", "authorization", "content-length", "transfer-encoding", "connection", "accept-encoding",
@@ -144,9 +147,17 @@ async def handle(request: web.Request) -> web.StreamResponse:
         if content_type:
             response.headers["Content-Type"] = content_type
         await response.prepare(request)
-        # SSE をそのまま流す
+        # SSE を流す。本文に英語の独り言が混ざったら、そこから先の本文を捨てる（speech_filter.py）
+        streaming = bool(content_type and content_type.startswith("text/event-stream") and upstream.status == 200)
+        filt = SpeechFilter() if streaming and FILTER_ENABLED else None
         async for chunk in upstream.content.iter_any():
-            await response.write(chunk)
+            out = filt.feed(chunk) if filt else chunk
+            if out:
+                await response.write(out)
+        if filt:
+            out = filt.close()
+            if out:
+                await response.write(out)
         await response.write_eof()
         if upstream.status >= 400:
             log.warning("upstream %s %s -> %d", request.method, request.path, upstream.status)

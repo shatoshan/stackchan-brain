@@ -58,6 +58,7 @@ services:
       - ./llm-proxy/rewrites.py:/opt/llm-proxy/rewrites.py:ro
       - ./llm-proxy/jev.py:/opt/llm-proxy/jev.py:ro
       - ./llm-proxy/gate.py:/opt/llm-proxy/gate.py:ro
+      - ./llm-proxy/speech_filter.py:/opt/llm-proxy/speech_filter.py:ro
       - ./data/llm-proxy:/data
     # ポートは公開しない（compose ネットワーク内の xiaozhi-server からだけ使う）
     healthcheck:

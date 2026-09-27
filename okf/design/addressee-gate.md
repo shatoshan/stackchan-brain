@@ -44,10 +44,10 @@ sources:
 
 | 条件 | 動き |
 |---|---|
-| ロボット宛ての確率 < 0.8（`LLM_GATE_ROBOT_MIN`）かつ 人・テレビ・独り言の合計 > 不明 | LLM を呼ばず空の応答（xiaozhi-server は `tts start`→`stop` だけで何も喋らない） |
+| ロボット宛ての確率 < 0.8（`LLM_GATE_ROBOT_MIN`）。「不明」が優勢でも止める | LLM を呼ばず空の応答（xiaozhi-server は `tts start`→`stop` だけで何も喋らない） |
 | addressee が robot で response が none（≥ 0.6） | LLM を呼ばず空の応答（相手の相槌に相槌で返さない） |
 | addressee が robot で response が backchannel（≥ 0.6） | LLM を呼ばず相槌（「うんうん。」等。相手と同じ言葉は選ばない）を返す |
-| それ以外（robot で reply・action、unclear 等） | LLM へそのまま |
+| それ以外（ロボット宛て ≥ 0.8 で reply・action） | LLM へそのまま |
 | Jev が使えない（429 等） | LLM へそのまま（fail-open） |
 
 - 空の応答・相槌だけの応答を xiaozhi-server が問題なく扱うことは、偽の LLM を立てて確認した（空: 音声 0 フレーム、相槌: 読み上げ）。[^run-0927]
@@ -64,6 +64,8 @@ sources:
   - 0.8 で再評価: 実機 9 件は jev 8/9（rule 2/9）、公開 14 件は jev 14/14。外れた「暇じゃないよ」は前回 0.77、今回 0.81。**同じ発話でも Jev の確率は呼ぶたびに揺れる**ので、境目の発話はどちらにも転ぶ。
   - 実機の 9 件は `data/brain/evals/gate_labeled.jsonl`（ローカル）に入れ、`gate_run.py --cases /data/evals/gate_labeled.jsonl` で流せる。
   - 会話中は写真を撮らない設定なので、カメラの在席情報（`camera_faces_in_view`）は空だった。
+- 3 回目（20:17〜、常時セッション、[決定 012](/decisions/012-firmware-always-on-session.md)）: 常にマイクが開いているため、聞き取りの崩れた家族の会話（「で構だけど」「自険を使うとか」など）が次々に届いた。Jev は `unclear` を最有力にし（ロボット宛て 0.25〜0.48）、「人・テレビ・独り言の合計 > 不明」の条件を満たさず LLM に渡った。崩れた文に返事をしようとした LLM が英語の思考メモを読み上げる暴走につながった（→ [llm-proxy](/services/llm-proxy.md)）。[^run-0927]
+  - **規則を「ロボット宛ての確率 < 0.8 なら止める」だけに変更**（不明が優勢でも止める）。記録済みの Jev の答えで計算し直すと、今夜の該当 5 件（ロボット宛て 0.25〜0.77）はすべて止まり、ラベル付き 9 件の正解は変わらない（通すべき 2 件は 0.90・0.97）。
 
 # Jev の呼び先
 

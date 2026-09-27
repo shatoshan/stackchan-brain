@@ -1,6 +1,9 @@
 # Update Log
 
 ## 2026-09-27
+* **Fix**: 常時セッションの実機試験で「暴走」。聞き取りの崩れた家族の会話を宛先ゲートが `unclear` として LLM に渡し、GPT-6 Luna が英語の思考メモを返答に混ぜて読み上げた。ゲートはロボット宛て < 0.8 なら不明でも止めるように、llm-proxy は英語の独り言が出たら以降の本文を捨てるように。[宛先ゲート](/design/addressee-gate.md)、[llm-proxy](/services/llm-proxy.md)。
+* **Update**: パッチ 0003 を実機に書き込み、AI Agent の待機 10 秒で自動で会話が開くことと、brain が目印を受け取ることを確認。開き直すたびに目の前の人へ「おかえり」と言う問題が見つかり、顔が見え続けている記録を次のセッションへ引き継ぐようにした。[決定 012](/decisions/012-firmware-always-on-session.md)、[brain](/services/brain.md)。
+* **Decision**: [決定 012](/decisions/012-firmware-always-on-session.md)（GitHub #1）。待機が 10 秒続いたら頭タッチと同じ経路で会話を開くパッチの設計と、ファームのソースで確かめたこと（開けないと警告音が鳴る、USB 給電中は電源が切れない、`SendMcpMessage` で目印を送れる）。human:shingo が承認し、パッチ `0003-always-on-session.patch` を作成・ビルド。[brain](/services/brain.md) に、自動で開いたセッションは休止から始めることと、「終了」の後 30 分は顔だけでは話しかけないことを実装。
 * **Update**: [宛先ゲート](/design/addressee-gate.md) の閾値を 0.8 に（human:shingo。実機で家族向けの発話 0.62〜0.77 を通していた）。返事不要なら黙る・相槌のオウム返しを避ける。実機 9 件を human:shingo のラベルでローカル evals に（jev 8/9）。
 * **Fix**: 宛先ゲートが brain 自身の LLM 代替判定の依頼までゲートにかけていたのを除外（`X-StackChan-Source: brain`）。実機試験の記録を [宛先ゲート](/design/addressee-gate.md) に。
 * **Update**: human:shingo が Vercel で TypeSafe のキーを BYOK 登録。Jev の成功率 5% → 70%、平均 0.44 秒。llm-proxy に 429 / 529 の短い再試行。初めて Jev で evals を評価: 判定ループ jev 8/8、宛先ゲートは判定規則を「ロボット宛ての確率 < 0.5 で止める」に変えて jev 14/14。[Jev](/external/jev.md)、[宛先ゲート](/design/addressee-gate.md)、[直感層の質問設計](/design/jev-questions.md)。

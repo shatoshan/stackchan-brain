@@ -152,12 +152,12 @@ async def classify(session: ClientSession, state: dict) -> dict:
     kind, kind_p = a["response"]["choice"], a["response"]["probabilities"].get(a["response"]["choice"], 0)
     probs = a["addressee"]["probabilities"]
     p_robot = probs.get("robot", 0.0)
-    p_other = sum(probs.get(k, 0.0) for k in ("people", "media", "self_talk"))
     decision, reply = "pass", None
-    # ロボット宛ての確率が低く、「不明」より人・テレビ・独り言が優勢なら止める。
+    # ロボット宛ての確率が低ければ止める。「不明」が優勢でも止める（常時セッションでは、聞き取りの崩れた
+    # 家族の会話が unclear になり LLM に渡っていた。2026-09-27、ラベル付き 9 件はこの規則でも全問正解）。
     # response の action は「ロボットへの操作」の意味なので、ロボット宛てでない時は見ない
     # （「お母さん、醤油取って」は人宛ての頼みごとで action と分類される）
-    if p_robot < ROBOT_MIN and p_other > probs.get("unclear", 0.0):
+    if p_robot < ROBOT_MIN:
         decision = "drop"
     elif who == "robot" and kind == "none" and kind_p >= MIN_CONFIDENCE:
         # 相手の相槌（「へえ」「うん」）などに相槌で返すと不自然なので黙る

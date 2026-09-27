@@ -31,11 +31,12 @@ sources:
   - 文中に埋め込まれる固定指示は部分置換（`SUBSTRING_REWRITES`）。VLLM が画像説明の質問に付ける「(请使用中文回复)」を日本語の指示に置き換える。画像付きメッセージ（content が配列）の文章部分も対象。
   - 本体の文言が変わると一致しなくなり、置換されないだけ（壊れはしない）。イメージを上げたら `rewritten=` のログ件数で確認する。server_0.9.6 では 1 リクエストあたり 8 件。
 - **壊れやすさへのガード**: 置換表は `llm-proxy/rewrites.py`（出典ファイル付き）。xiaozhi-server のイメージを上げたら `python3 scripts/check_upstream_strings.py` で、置換対象の文言がイメージ内にまだあるか検査する（無ければ終了コード 1）。実行中も、tools 付きリクエストで few-shot が 5 回連続で見当たらない、few-shot があるのに 1 件も置換されない、画像説明に日本語指示が入っていない、のいずれかで `UPSTREAM CHANGED?` 警告をログに出す（各 1 回）。セッション最初の 1 往復は few-shot が入らないことがあるので、単発では警告しない。
+- **英語の独り言の除去**（`llm-proxy/speech_filter.py`、`LLM_PROXY_SPEECH_FILTER=0` で無効）: SSE の本文を文ごとに溜め、日本語を含まない英文（英単語 2 つ以上）か英単語が日本語の文字より多い文が出たら、その文と以降の本文をすべて捨てる。ツール呼び出しと finish_reason は通す。2026-09-27、常時セッションで崩れた発話（「き念がお呂で使うじゃないといよ」）を受けた GPT-6 Luna（`reasoning_effort: none`）が、返答に "a little more natural?"、"Need ask clarify maybe …"、"natural. 1-2 sentences. Japanese. no emoji needed" のような思考メモを混ぜ、それがそのまま読み上げられた。当夜の返答を再生すると「なるほど。お風呂で使うものの話なんだね。」で止まる。「YouTube見てるの？」「iPhone 17 Pro の話？」「LED を青にしたよ」は通す。
 - `LLM_PROXY_LOG_BODY=1` でリクエスト本文をログに出す（デバッグ用。会話内容が残るので常用しない）。
 - **宛先ゲート**: ユーザー発話で LLM が呼ばれる前に Jev で分類し、LLM を呼ばずに相槌か無応答で返すことがある（→ [宛先ゲート](/design/addressee-gate.md)）。
 - **Jev の窓口**: `POST /jev/evaluate`（Vercel 形式）。呼び先は `JEV_BACKEND`（gateway / typesafe）。brain はここを使う。evals 用に `POST /gate/classify`（記録しない）。
 - `GET /healthz` はヘルスチェック用。ポートはホストに公開しない（compose ネットワーク内の `http://llm-proxy:8080/v1`）。
-- 追加ビルドを避けるため、aiohttp を同梱している xiaozhi-server イメージで `python /opt/llm-proxy/proxy.py` を実行している。
+- 追加ビルドを避けるため、aiohttp を同梱している xiaozhi-server イメージで `python /opt/llm-proxy/proxy.py` を実行している。**ソースはファイル単位でマウントしているので、`llm-proxy/` に .py を足したら `docker-compose.yml` の volumes にも足す**（忘れると ModuleNotFoundError で再起動を繰り返す。2026-09-27 に 1 分ほど落ちた）。
 
 # 確認済み
 
