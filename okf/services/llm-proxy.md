@@ -32,6 +32,8 @@ sources:
   - 本体の文言が変わると一致しなくなり、置換されないだけ（壊れはしない）。イメージを上げたら `rewritten=` のログ件数で確認する。server_0.9.6 では 1 リクエストあたり 8 件。
 - **壊れやすさへのガード**: 置換表は `llm-proxy/rewrites.py`（出典ファイル付き）。xiaozhi-server のイメージを上げたら `python3 scripts/check_upstream_strings.py` で、置換対象の文言がイメージ内にまだあるか検査する（無ければ終了コード 1）。実行中も、tools 付きリクエストで few-shot が 5 回連続で見当たらない、few-shot があるのに 1 件も置換されない、画像説明に日本語指示が入っていない、のいずれかで `UPSTREAM CHANGED?` 警告をログに出す（各 1 回）。セッション最初の 1 往復は few-shot が入らないことがあるので、単発では警告しない。
 - `LLM_PROXY_LOG_BODY=1` でリクエスト本文をログに出す（デバッグ用。会話内容が残るので常用しない）。
+- **宛先ゲート**: ユーザー発話で LLM が呼ばれる前に Jev で分類し、LLM を呼ばずに相槌か無応答で返すことがある（→ [宛先ゲート](/design/addressee-gate.md)）。
+- **Jev の窓口**: `POST /jev/evaluate`（Vercel 形式）。呼び先は `JEV_BACKEND`（gateway / typesafe）。brain はここを使う。evals 用に `POST /gate/classify`（記録しない）。
 - `GET /healthz` はヘルスチェック用。ポートはホストに公開しない（compose ネットワーク内の `http://llm-proxy:8080/v1`）。
 - 追加ビルドを避けるため、aiohttp を同梱している xiaozhi-server イメージで `python /opt/llm-proxy/proxy.py` を実行している。
 

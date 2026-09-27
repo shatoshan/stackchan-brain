@@ -38,6 +38,7 @@ okf_version: "0.2"
 * [3層アーキテクチャ](design/three-layer-architecture.md) - 反射（端末）/ 直感（Jev）/ 熟考（GPT-6 Luna）に役割と時間スケールを分ける全体設計。
 * [状態ブロブ仕様](design/state-blob.md) - 直感層に毎周期渡す固定フォーマット JSON。（draft）
 * [カメラで在席を知る](design/camera-presence.md) - ファーム無改変で使えるカメラ経路の調査。take_photo の送り先を brain に向ける案。（draft）
+* [宛先ゲート](design/addressee-gate.md) - LLM を呼ぶ前に Jev で発話の宛先と返事の要否を分類する。（draft）
 * [直感層の質問設計](design/jev-questions.md) - Jev に状況を分類させる理由、ルール・閾値との分担、evals。（draft）
 
 # decisions — 決定記録

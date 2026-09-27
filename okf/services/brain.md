@@ -55,7 +55,7 @@ curl -s -X POST 127.0.0.1:8011/say -d '{"mode":"llm","text":"（ロボットか�
 
 # 判定ループ（`brain/judge.py`）
 
-- 5 秒ごとに中継中のセッションを見て、ルールで絞ってから Jev（`/v1/evaluate`、llm-proxy 経由なので brain はキーを持たない）に判定させ、話すなら表情を送ってから `/say` と同じ処理で差し込む。質問と閾値は [直感層の質問設計](/design/jev-questions.md)。
+- 5 秒ごとに中継中のセッションを見て、ルールで絞ってから Jev（llm-proxy の `/jev/evaluate`。呼び先は llm-proxy の `JEV_BACKEND` で決まり、brain はキーを持たない）に判定させ、話すなら表情を送ってから `/say` と同じ処理で差し込む。質問と閾値は [直感層の質問設計](/design/jev-questions.md)。
 - Jev が 429 / エラーなら 60 秒から最大 10 分まで倍々で Jev を止め、その間は LLM（`LLM_MODEL`）に同じ分類を JSON で答えさせる。LLM 判定は 1 台あたり 30 秒に 1 回まで。
 - 判定はすべて `data/brain/judgments/YYYYMMDD.jsonl` に記録（状態ブロブ、閾値、答え、Jev の生の確率、行動）。evals の素材にする。
 - まだ誰も話していないセッション（ウェイクワードや近接センサで開いた直後）は、開いて 5 秒（`BRAIN_QUIET_AFTER_OPEN`）で判定に入る。会話が始まった後は 20 秒ルール。

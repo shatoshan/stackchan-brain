@@ -1,6 +1,8 @@
 # Update Log
 
 ## 2026-09-27
+* **Creation**: [宛先ゲート](/design/addressee-gate.md)（draft、GitHub #2）。llm-proxy で、ユーザー発話を Jev で分類し、LLM を呼ばずに相槌・無応答で返す。Jev が使えない時は LLM へ渡す。evals（`gate_cases.jsonl`、`gate_run.py`、rule 10/14）。
+* **Update**: [Jev](/external/jev.md)。Vercel 経由の 429 が継続（20 回中成功 1）。TypeSafe 直接 API と Vercel BYOK を調査し、llm-proxy で呼び先を切り替え可能に（`JEV_BACKEND`）。brain も llm-proxy 経由に。
 * **Update**: evals にルールのみのベースライン判定器（rule 6/8、llm 8/8）。LLM 代替判定の JSON パースを頑健化（JSON の後ろの余分な文字で落ちていた）。
 * **Update**: [決定 003](/decisions/003-lan-only.md) と [xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md) に「ASR はローカル必須（セッション中はマイク音声が常時流れるため）」と、認識テキストは LLM 経由でクラウドに出ることを追記。
 * **Update**: [llm-proxy](/services/llm-proxy.md) に置換対象の検査スクリプトと実行時の警告を追加（イメージ更新で中国語文言が変わると静かに壊れるため）。

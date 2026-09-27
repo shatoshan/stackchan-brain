@@ -47,9 +47,18 @@ services:
       AI_GATEWAY_API_KEY: ${AI_GATEWAY_API_KEY:?AI_GATEWAY_API_KEY を .env に設定してください}
       LLM_REASONING_EFFORT: ${LLM_REASONING_EFFORT:-none}
       LLM_PROXY_LOG_BODY: ${LLM_PROXY_LOG_BODY:-0}
+      # Jev の呼び先: gateway（Vercel AI Gateway）/ typesafe（TypeSafe 直接、TYPESAFE_API_KEY が必要）
+      JEV_BACKEND: ${JEV_BACKEND:-gateway}
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
+      # 宛先ゲート（GitHub #2）: ユーザー発話を Jev で分類し、LLM を呼ぶか決める
+      LLM_GATE_ENABLED: ${LLM_GATE_ENABLED:-1}
+      LLM_GATE_RECORD_DIR: /data/gate
     volumes:
       - ./llm-proxy/proxy.py:/opt/llm-proxy/proxy.py:ro
       - ./llm-proxy/rewrites.py:/opt/llm-proxy/rewrites.py:ro
+      - ./llm-proxy/jev.py:/opt/llm-proxy/jev.py:ro
+      - ./llm-proxy/gate.py:/opt/llm-proxy/gate.py:ro
+      - ./data/llm-proxy:/data
     # ポートは公開しない（compose ネットワーク内の xiaozhi-server からだけ使う）
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]

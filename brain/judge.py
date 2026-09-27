@@ -23,7 +23,7 @@ from vision import PRESENCE_QUESTION
 log = logging.getLogger("brain.judge")
 
 GATEWAY = os.environ.get("BRAIN_GATEWAY_URL", "http://llm-proxy:8080/v1")
-JEV_MODEL = os.environ.get("BRAIN_JEV_MODEL", "typesafe-ai/jev")
+JEV_URL = os.environ.get("BRAIN_JEV_URL", "http://llm-proxy:8080/jev/evaluate")
 FALLBACK_MODEL = os.environ.get("LLM_MODEL", "openai/gpt-6-luna")
 INTERVAL = float(os.environ.get("BRAIN_JUDGE_INTERVAL", "5"))
 
@@ -225,8 +225,9 @@ class Judge:
         return None
 
     async def _ask_jev(self, state: dict) -> dict:
-        body = {"model": JEV_MODEL, "state": state, "questions": QUESTIONS}
-        async with self.client.post(f"{GATEWAY}/evaluate", json=body) as r:
+        # llm-proxy の Jev 窓口（Gateway 経由か TypeSafe 直接かは llm-proxy の JEV_BACKEND で決まる）
+        body = {"state": state, "questions": QUESTIONS}
+        async with self.client.post(JEV_URL, json=body) as r:
             if r.status != 200:
                 raise RuntimeError(f"jev {r.status}: {(await r.text())[:200]}")
             data = await r.json()

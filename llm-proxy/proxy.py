@@ -14,6 +14,8 @@ import os
 
 from aiohttp import ClientSession, ClientTimeout, web
 
+import gate
+import jev
 from rewrites import FEWSHOT_ID_PREFIX, REWRITES, SUBSTRING_REWRITES
 
 UPSTREAM = os.environ.get("LLM_PROXY_UPSTREAM", "https://ai-gateway.vercel.sh").rstrip("/")
@@ -123,6 +125,12 @@ async def handle(request: web.Request) -> web.StreamResponse:
                  len(payload.get("tools") or []), payload.get("stream"), rewritten)
         if LOG_BODY:
             log.info("request body: %s", json.dumps(payload, ensure_ascii=False))
+        # 宛先ゲート: ユーザー発話なら Jev で分類し、LLM を呼ばずに済むものは ここで返す
+        text = gate.should_gate(payload)
+        if text is not None:
+            decision, reply = await gate.decide(request.app["session"], payload, text)
+            if decision != "pass":
+                return web.Response(body=gate.sse_reply(payload.get("model", ""), reply), content_type="text/event-stream")
         body = json.dumps(payload).encode()
 
     headers = {k: v for k, v in request.headers.items() if k.lower() not in HOP_HEADERS}
@@ -144,6 +152,21 @@ async def handle(request: web.Request) -> web.StreamResponse:
         return response
 
 
+async def jev_evaluate(request: web.Request) -> web.Response:
+    """brain 用の Jev 窓口（Vercel 形式）。呼び先は JEV_BACKEND で切り替わる。"""
+    body = await request.json()
+    try:
+        res = await jev.evaluate(request.app["session"], body["state"], body["questions"])
+    except jev.JevError as e:
+        return web.json_response({"error": {"message": str(e)}}, status=e.status)
+    return web.json_response(res)
+
+
+async def gate_classify(request: web.Request) -> web.Response:
+    """evals 用: 状態ブロブを宛先ゲートで分類して返す（記録しない）。"""
+    return web.json_response(await gate.classify(request.app["session"], await request.json()))
+
+
 async def on_startup(app: web.Application) -> None:
     app["session"] = ClientSession(timeout=ClientTimeout(total=300, sock_connect=10))
 
@@ -162,6 +185,8 @@ def main() -> None:
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
     app.router.add_get("/healthz", health)
+    app.router.add_post("/jev/evaluate", jev_evaluate)
+    app.router.add_post("/gate/classify", gate_classify)
     app.router.add_route("*", "/{path:.*}", handle)
     web.run_app(app, host="0.0.0.0", port=PORT, print=None)
 

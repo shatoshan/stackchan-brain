@@ -86,6 +86,8 @@ class Session:
             "since_robot_s": round(now - self.last_robot_end_at) if self.last_robot_end_at else None,
             "injections": self.injections,
             "since_injection_s": round(now - self.last_injection_at) if self.last_injection_at else None,
+            "faces_in_view": self.presence.get("faces") if self.presence else None,
+            "face_checked_s_ago": round(now - self.presence["checked_at"]) if self.presence else None,
         }
 
 

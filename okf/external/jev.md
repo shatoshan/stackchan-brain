@@ -47,6 +47,15 @@ sources:
   - id: run-0926b
     resource: process:claude-code-session-2026-09-26
     title: 2026-09-26 M3 判定ループでの利用
+  - id: ts-quick
+    resource: https://docs.typesafe.ai/introduction/quickstart.md
+    title: TypeSafe docs — Quick start
+  - id: v-byok
+    resource: https://vercel.com/docs/ai-gateway/authentication-and-byok/byok
+    title: Vercel AI Gateway — BYOK（last_updated 2026-09-22）
+  - id: run-0927
+    resource: process:claude-code-session-2026-09-27
+    title: 2026-09-27 Jev の疎通確認（Gateway 経由 20 回）
   - id: v-catalog
     resource: https://ai-gateway.vercel.sh/v1/models
     title: AI Gateway モデルカタログ（2026-09-26）
@@ -66,6 +75,14 @@ sources:
 - **Vercel の無料枠でも使える**（同じキーで GPT-6 Luna は 403）。[^run-0926]
 - 上流（typesafe-ai）の処理時間 約 160ms、コスト \$0.000012。ルーティングは `typesafe-ai` 優先、フォールバック `digitalocean`。[^run-0926]
 - `providerMetadata.typesafe.confidence` キーは Gateway 経由でも存在するが、boolean 質問では空オブジェクトだった。確率本体は `answers` 側。[^run-0926]
+
+# 呼び先の切り替え（2026-09-27）
+
+- **Vercel 経由の 429 は続いている。** 2026-09-27 15:54 に 3 秒間隔で 20 回呼んで成功 1 回（5%）。ゲートの evals（14 件）も全件 429。前日の判定記録でも Jev 成功 12 / LLM 代替 55。[^run-0927]
+- **TypeSafe 直接**: `POST https://api.typesafe.ai/v1/systemone`、`Authorization: Bearer <API_KEY>`、モデル `jev-latest`。キーは `https://console.typesafe.ai/keys` で発行（Playground にログイン）、SDK は `TYPESAFE_API_KEY` を読む。形式は Vercel とほぼ同じで、yes/no の型が `noul`、答えも `{"noul": p}`。エラーは 429（レート制限）と 529（過負荷）で、指数バックオフで再試行するよう書かれている。[^ts-api] [^ts-quick]
+  - 公開の登録フォームは見当たらない（トップは early access）。`console.typesafe.ai` はエージェントの環境から 403。人間がブラウザで確認する必要がある。
+- **Vercel の BYOK**: 自分のプロバイダーキーを Vercel のダッシュボードに登録すると、Gateway 経由のまま自分のキーで呼ぶ（上乗せ料金なし、有料枠が前提、失敗時はシステム認証に切り替え）。ドキュメントの資格情報の表に TypeSafe の記載は無く、対応しているかはダッシュボードで確認が要る。[^v-byok]
+- llm-proxy の `jev.py` で `JEV_BACKEND=gateway` / `typesafe` を切り替えられるようにした（`typesafe` は `TYPESAFE_API_KEY` が必要）。brain も llm-proxy 経由で呼ぶ。
 
 # 使ってみて分かったこと（2026-09-26、M3）
 
@@ -139,5 +156,8 @@ sources:
 [^v-catalog]: AI Gateway モデルカタログ
 [^run-0926]: 2026-09-26 実呼び出し
 [^run-0926b]: 2026-09-26 M3 判定ループでの利用
+[^ts-quick]: TypeSafe docs — Quick start
+[^v-byok]: Vercel AI Gateway — BYOK
+[^run-0927]: 2026-09-27 Jev の疎通確認
 [^or-jev]: OpenRouter — Jev guide
 [^cf-jev]: Cloudflare Workers AI — typesafe/jev
