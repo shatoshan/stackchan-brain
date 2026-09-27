@@ -1,6 +1,7 @@
 # Update Log
 
 ## 2026-09-27
+* **Update**: human:shingo が Vercel で TypeSafe のキーを BYOK 登録。Jev の成功率 5% → 70%、平均 0.44 秒。llm-proxy に 429 / 529 の短い再試行。初めて Jev で evals を評価: 判定ループ jev 8/8、宛先ゲートは判定規則を「ロボット宛ての確率 < 0.5 で止める」に変えて jev 14/14。[Jev](/external/jev.md)、[宛先ゲート](/design/addressee-gate.md)、[直感層の質問設計](/design/jev-questions.md)。
 * **Creation**: [宛先ゲート](/design/addressee-gate.md)（draft、GitHub #2）。llm-proxy で、ユーザー発話を Jev で分類し、LLM を呼ばずに相槌・無応答で返す。Jev が使えない時は LLM へ渡す。evals（`gate_cases.jsonl`、`gate_run.py`、rule 10/14）。
 * **Update**: [Jev](/external/jev.md)。Vercel 経由の 429 が継続（20 回中成功 1）。TypeSafe 直接 API と Vercel BYOK を調査し、llm-proxy で呼び先を切り替え可能に（`JEV_BACKEND`）。brain も llm-proxy 経由に。
 * **Update**: evals にルールのみのベースライン判定器（rule 6/8、llm 8/8）。LLM 代替判定の JSON パースを頑健化（JSON の後ろの余分な文字で落ちていた）。
