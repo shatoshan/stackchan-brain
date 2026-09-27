@@ -25,6 +25,8 @@ log = logging.getLogger("llm-proxy.gate")
 ENABLED = os.environ.get("LLM_GATE_ENABLED", "1") == "1"
 BRAIN_URL = os.environ.get("BRAIN_CONTROL_URL", "http://brain:8011")
 MIN_CONFIDENCE = float(os.environ.get("LLM_GATE_MIN_CONFIDENCE", "0.6"))
+# ロボット宛ての確率がこれ未満なら止める候補（2026-09-27 の 14 ケースで決めた暫定値）
+ROBOT_MIN = float(os.environ.get("LLM_GATE_ROBOT_MIN", "0.5"))
 RECORD_DIR = Path(os.environ.get("LLM_GATE_RECORD_DIR", "/data/gate"))
 BACKCHANNELS = ["うんうん。", "そっか。", "なるほどね。", "へえ。", "うん。"]
 # brain が llm モードで差し込む指示（ロボットからの話しかけ）はゲートしない
@@ -144,12 +146,18 @@ async def classify(session: ClientSession, state: dict) -> dict:
     a = res["answers"]
     who, who_p = a["addressee"]["choice"], a["addressee"]["probabilities"].get(a["addressee"]["choice"], 0)
     kind, kind_p = a["response"]["choice"], a["response"]["probabilities"].get(a["response"]["choice"], 0)
+    probs = a["addressee"]["probabilities"]
+    p_robot = probs.get("robot", 0.0)
+    p_other = sum(probs.get(k, 0.0) for k in ("people", "media", "self_talk"))
     decision, reply = "pass", None
-    if who in ("people", "media", "self_talk") and who_p >= MIN_CONFIDENCE and kind != "action":
+    # ロボット宛ての確率が低く、「不明」より人・テレビ・独り言が優勢なら止める。
+    # response の action は「ロボットへの操作」の意味なので、ロボット宛てでない時は見ない
+    # （「お母さん、醤油取って」は人宛ての頼みごとで action と分類される）
+    if p_robot < ROBOT_MIN and p_other > probs.get("unclear", 0.0):
         decision = "drop"
     elif who == "robot" and kind in ("backchannel", "none") and kind_p >= MIN_CONFIDENCE:
         decision, reply = "backchannel", random.choice(BACKCHANNELS)
-    entry.update(decision=decision, reply=reply, addressee=who, addressee_p=round(who_p, 3), response=kind,
+    entry.update(decision=decision, reply=reply, addressee=who, addressee_p=round(who_p, 3), p_robot=round(p_robot, 3), response=kind,
                  response_p=round(kind_p, 3), backend=res["backend"], latency_s=round(time.time() - started, 3), raw=a)
     return entry
 

@@ -8,6 +8,7 @@ TypeSafe 直接では boolean を noul に読み替え、答えの {"noul": p} �
 根拠: okf/external/jev.md
 """
 
+import asyncio
 import os
 
 from aiohttp import ClientSession
@@ -25,8 +26,26 @@ class JevError(Exception):
         self.status = status
 
 
+# 429 / 529（混雑）の時の再試行の待ち時間（秒）。TypeSafe のドキュメントは指数バックオフでの再試行を案内している。
+# 宛先ゲートは返事の遅れに直結するので短めにする
+RETRY_DELAYS = [float(x) for x in os.environ.get("JEV_RETRY_DELAYS", "0.3,0.8").split(",") if x]
+
+
 async def evaluate(session: ClientSession, state, questions: dict, timeout: float = 10.0) -> dict:
-    """Vercel 形式の questions を受け取り、Vercel 形式の {"answers": ..., "backend": ...} を返す。"""
+    """Vercel 形式の questions を受け取り、Vercel 形式の {"answers": ..., "backend": ..., "attempts": n} を返す。"""
+    for attempt, delay in enumerate([0.0] + RETRY_DELAYS):
+        if delay:
+            await asyncio.sleep(delay)
+        try:
+            res = await _evaluate_once(session, state, questions, timeout)
+            res["attempts"] = attempt + 1
+            return res
+        except JevError as e:
+            if e.status not in (429, 529) or attempt == len(RETRY_DELAYS):
+                raise
+
+
+async def _evaluate_once(session: ClientSession, state, questions: dict, timeout: float) -> dict:
     if BACKEND == "typesafe":
         qs = {k: dict(v, type="noul") if v.get("type") == "boolean" else v for k, v in questions.items()}
         headers = {"Authorization": f"Bearer {os.environ['TYPESAFE_API_KEY']}"}

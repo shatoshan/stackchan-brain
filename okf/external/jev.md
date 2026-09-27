@@ -82,6 +82,8 @@ sources:
 - **TypeSafe 直接**: `POST https://api.typesafe.ai/v1/systemone`、`Authorization: Bearer <API_KEY>`、モデル `jev-latest`。キーは `https://console.typesafe.ai/keys` で発行（Playground にログイン）、SDK は `TYPESAFE_API_KEY` を読む。形式は Vercel とほぼ同じで、yes/no の型が `noul`、答えも `{"noul": p}`。エラーは 429（レート制限）と 529（過負荷）で、指数バックオフで再試行するよう書かれている。[^ts-api] [^ts-quick]
   - 公開の登録フォームは見当たらない（トップは early access）。`console.typesafe.ai` はエージェントの環境から 403。人間がブラウザで確認する必要がある。
 - **Vercel の BYOK**: 自分のプロバイダーキーを Vercel のダッシュボードに登録すると、Gateway 経由のまま自分のキーで呼ぶ（上乗せ料金なし、有料枠が前提、失敗時はシステム認証に切り替え）。ドキュメントの資格情報の表に TypeSafe の記載は無く、対応しているかはダッシュボードで確認が要る。[^v-byok]
+- **BYOK で解決（2026-09-27）。** human:shingo が Vercel のダッシュボードで TypeSafe のキーを BYOK に登録した。同じく 3 秒間隔 20 回で、成功 14（あなたのキー `credentialType: byok` 13、Vercel 共有 `system` 1）、429 は 6。平均 0.44 秒・最大 0.64 秒。Vercel 側のコストは 0（BYOK は上乗せなし。Jev の料金は TypeSafe から直接請求される想定）。TypeSafe のキーは Vercel に登録されるので `.env` は変えない。[^run-0927]
+- 残る 429 に備えて、llm-proxy で 429 / 529 の時に 0.3 秒・0.8 秒の 2 回だけ再試行する（`JEV_RETRY_DELAYS`）。宛先ゲートは返事の遅れに直結するので短くしている。
 - llm-proxy の `jev.py` で `JEV_BACKEND=gateway` / `typesafe` を切り替えられるようにした（`typesafe` は `TYPESAFE_API_KEY` が必要）。brain も llm-proxy 経由で呼ぶ。
 
 # 使ってみて分かったこと（2026-09-26、M3）
