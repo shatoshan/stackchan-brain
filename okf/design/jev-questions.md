@@ -37,7 +37,7 @@ sources:
 |---|---|---|
 | `situation` | choice | `pause_in_conversation`、`just_woken_no_talk`、`person_arrived`（話してよい）／`person_left_or_busy`、`robot_ignored`（黙る） |
 | `speech_kind` | choice | `follow_up`、`question`、`time_remark`、`fixed_phrase` |
-| `phrase` | choice | 定型フレーズ 5 種（`fixed_phrase` の時だけ使う） |
+| `phrase` | choice | 定型フレーズ 4 種（`fixed_phrase` の時だけ使う） |
 | `emotion` | choice | `neutral`、`happy`、`doubtful`、`sad`（StackChan の表情名。`sleepy` は眠りポーズに入るので使わない） |
 
 - 首の見回しは Jev に聞かない（ルール）。`attention` 質問は試したが、実機で `look_around` が一度も選ばれず、話さない判定の場面もほとんど来なかったので外した。→ [brain](/services/brain.md)
@@ -59,6 +59,12 @@ sources:
 # カメラ情報の扱い（2026-09-26）
 
 - 状態ブロブに `person`（カメラの顔検出）を入れ、状況に `person_arrived` を追加した。
+- **自発発話の質**（#6、2026-09-27）: 実機の自発発話 35 件を見直すと、(1) follow_up が自分の直前の発言をなぞる・言い直す・反省する（「今度こそ左を向いたよ」「さっきの返し少し気取ってたね」）、(2) question が毎回「今日はどんな一日だった？」、(3) 定型の「ねえねえ。」だけで終わりほぼ返事が無い、(4) 話しかける時に LLM がツールを呼び、カメラの説明や中国語のタイムアウト文（「工具调用请求超时」）を読み上げる、が目立った。対処:
+  - 指示文に共通の注意（許可を求めない、自分の直前の発言をなぞる・言い直す・反省しない、一言か二言）。follow_up は「相手が最後に話していた話題に、まだ言っていない新しい角度（素朴な質問、感想、関連する小さな話）で」。
+  - 同じ端末で最近自分から言ったこと 5 件（`BRAIN_RECENT_PROACTIVE`、セッションをまたいで brain が覚える）を指示に添え、同じ内容・同じ質問を避けさせる。
+  - 「ねえねえ。」を定型フレーズから外した。
+  - llm-proxy が brain の指示には `tool_choice: none` を付ける（→ [llm-proxy](/services/llm-proxy.md)）。
+  - 疑似端末で確認: 「新しいプロジェクトで緊張してる」の後、follow_up 3 回とも直前の励ましを繰り返さず新しい質問（「どんな担当になりそう？」など）、question は「今日はどんな一日だった？」を避けた。直前の指示文では 2 回中 1 回、直前の助言を言い換えていた。
 - `person_arrived` の時は定型フレーズを使わず、LLM に「カメラで相手が戻ってきたのが見えた、おかえり等の一言」を指示する。定型文（verbatim）だと「戻ってきた」ことが xiaozhi-server の会話履歴に残らず、実機で相手の返事に「いってらっしゃい」と出かける前の文脈で答えてしまった。
 - 最初の説明文では、LLM は「出かけてくる」と言った後に顔が映っても `person_left_or_busy` と判定した。「以前出かけると言っていても、今顔が見えるなら戻ってきた」「離れた＝カメラにも誰もいない」と明記して解決。[^evals]
 

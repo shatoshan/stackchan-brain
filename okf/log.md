@@ -1,6 +1,7 @@
 # Update Log
 
 ## 2026-09-27
+* **Update**: 自発発話の質（#6）。実機 35 件の傾向（自分の発言をなぞる・反省する、同じ質問の繰り返し、「ねえねえ」だけ、ツールの読み上げ）から、指示文の改訂、最近の自発発話 5 件を添えて繰り返しを避ける、「ねえねえ。」の削除、brain の指示に `tool_choice: none`。[直感層の質問設計](/design/jev-questions.md)、[llm-proxy](/services/llm-proxy.md)。
 * **Update**: 発話が細切れに認識される原因は VAD の無音 200 ms（本体の既定）。`XIAOZHI_VAD_SILENCE_MS`（既定 700）で上書きできるように。[xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md)。
 * **Update**: human:shingo が宛先ゲートの実機記録 48 件にラベル。71 件 × 3 回で閾値 0.75〜0.85 が 66/71 の横ばいとなり、0.8 を維持。残る誤りは聞き取りの崩れたロボット宛て発話で、閾値では直らない。[宛先ゲート](/design/addressee-gate.md)。
 * **Update**: 宛先ゲートの閾値を実データで調整する仕組み（#14）。`evals/gate_label.py`（ラベル付け）、`evals/gate_sweep.py`（閾値の探索、Jev の答えを貯めて再計算）、llm-proxy の `/gate/decide`。23 件 × 3 回で 0.85 が 23/23、0.80 は 22/23。[宛先ゲート](/design/addressee-gate.md)。

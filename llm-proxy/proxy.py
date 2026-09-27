@@ -122,11 +122,16 @@ async def handle(request: web.Request) -> web.StreamResponse:
         # 呼び出し側が明示した値は尊重する
         if "reasoning_effort" not in payload and "reasoning" not in payload:
             payload["reasoning_effort"] = REASONING_EFFORT
+        # brain が自分から話しかける指示ではツールを使わせない（カメラの説明やツールのタイムアウト文を読み上げていた）
+        messages = payload.get("messages") or []
+        if (payload.get("tools") and messages and messages[-1].get("role") == "user"
+                and (gate.user_text(messages[-1]) or "").startswith(gate.BRAIN_INSTRUCTION_PREFIX)):
+            payload["tool_choice"] = "none"
         rewritten = rewrite_messages(payload.get("messages") or [])
         check_expected_strings(payload, rewritten)
-        log.info("chat.completions model=%s reasoning_effort=%s tools=%d stream=%s rewritten=%d",
-                 payload.get("model"), payload.get("reasoning_effort"),
-                 len(payload.get("tools") or []), payload.get("stream"), rewritten)
+        log.info("chat.completions model=%s reasoning_effort=%s tools=%d%s stream=%s rewritten=%d",
+                 payload.get("model"), payload.get("reasoning_effort"), len(payload.get("tools") or []),
+                 " (tool_choice=none)" if payload.get("tool_choice") == "none" else "", payload.get("stream"), rewritten)
         if LOG_BODY:
             log.info("request body: %s", json.dumps(payload, ensure_ascii=False))
         # 宛先ゲート: ユーザー発話なら Jev で分類し、LLM を呼ばずに済むものは ここで返す

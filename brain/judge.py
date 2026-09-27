@@ -13,6 +13,7 @@ import logging
 import os
 import random
 import time
+from collections import deque
 from pathlib import Path
 
 from aiohttp import ClientSession, ClientTimeout
@@ -62,9 +63,9 @@ SPEECH_KINDS = {
     "time_remark": "Make a short remark about the current time of day",
     "fixed_phrase": "A short friendly interjection from the fixed phrase list",
 }
-# 定型フレーズ（Jev が選ぶ）。キーは choice の名前
+# 定型フレーズ（Jev が選ぶ）。キーは choice の名前。
+# 「ねえねえ。」だけで終わるものは、呼びかけて何も言わないので返事がほぼ無く外した（#6、2026-09-27）
 PHRASES = {
-    "hey": "ねえねえ。",
     "here": "ぼく、ここにいるよ。",
     "quiet": "なんだか静かだね。",
     "humming": "ふんふーん♪",
@@ -94,15 +95,31 @@ CAMERA_YAW_SIGN = float(os.environ.get("BRAIN_CAMERA_YAW_SIGN", "1"))  # 画像�
 QUIET_AFTER_EXIT = float(os.environ.get("BRAIN_QUIET_AFTER_EXIT", "1800"))
 IDLE_GLANCE_GAP = (float(os.environ.get("BRAIN_IDLE_GLANCE_GAP_MIN", "30")), float(os.environ.get("BRAIN_IDLE_GLANCE_GAP_MAX", "60")))
 
-# llm モードで LLM に渡す指示（会話履歴には user 発話として残る）
+# llm モードで LLM に渡す指示（会話履歴には user 発話として残る）。
+# 2026-09-27 までの実機 35 件で、follow_up が自分の直前の発言をなぞる・言い直す・反省する（「今度こそ左を向いたよ」
+# 「さっきの返し少し気取ってたね」）、question が毎回「今日はどんな一日だった？」になる、が目立った（#6）
+COMMON_RULES = "許可は求めず、自分の直前の発言をなぞったり、言い直したり、反省したりしないでください。一言か二言で。"
 LLM_INSTRUCTIONS = {
-    "follow_up": "（ロボットから話しかける場面です。直前の会話の話題を踏まえて、一言だけ自然に話しかけてください。許可は求めないでください）",
-    "question": "（ロボットから話しかける場面です。相手の今日の様子や好きなことについて、軽い質問を一つだけしてください。「聞いてもいい？」とは言わず、直接質問してください）",
-    "time_remark": "（ロボットから話しかける場面です。今の時間帯について、ひとこと感想を言ってください）",
+    "follow_up": "（ロボットから話しかける場面です。相手が最後に話していた話題について、まだ言っていない新しい角度"
+                 "（素朴な質問、自分の感想、関連する小さな話）で自然に話しかけてください。直前の自分の助言や励ましを繰り返さないでください。"
+                 + COMMON_RULES + "）",
+    "question": "（ロボットから話しかける場面です。相手の今日の様子や好きなことについて、軽い質問を一つだけしてください。"
+                "「聞いてもいい？」とは言わず、直接質問してください。" + COMMON_RULES + "）",
+    "time_remark": "（ロボットから話しかける場面です。今の時間帯について、ひとこと感想を言ってください。" + COMMON_RULES + "）",
     # 定型文だと「相手が戻ってきた」ことが会話履歴に残らず、その後の返答が噛み合わないので LLM に言わせる
     "person_arrived": "（ロボットから話しかける場面です。カメラで、相手が目の前に来た（戻ってきた）のが見えました。"
-                      "「おかえり」など、来てくれたことへの短い一言を言ってください）",
+                      "「おかえり」など、来てくれたことへの短い一言を言ってください。" + COMMON_RULES + "）",
 }
+# 同じ端末で最近自分から言ったことを、この件数まで指示に添えて繰り返しを避ける
+RECENT_PROACTIVE = int(os.environ.get("BRAIN_RECENT_PROACTIVE", "5"))
+
+
+def with_recent(instruction: str, recent: list[str]) -> str:
+    """指示の末尾に、最近自分から言ったこと（同じ内容・同じ質問を避ける）を添える。"""
+    if not recent:
+        return instruction
+    said = "、".join(f"「{t}」" for t in recent)
+    return instruction[:-1] + f"最近自分から言ったこと（同じ内容や同じ質問は避ける）: {said}）"
 
 
 def person_state(session: Session) -> dict | None:
@@ -167,6 +184,9 @@ class Judge:
         self.dormant: dict[str, float] = {}
         self.next_glance_gap: dict[str, float] = {}  # session.id -> 次のよそ見までの間隔
         self.auto_seen: set[str] = set()  # 自動で開いたセッションのうち、休止に入れたもの
+        # device_id -> 最近自分から言ったこと（セッションをまたいで持つ）
+        self.recent_proactive: dict[str, deque] = {}
+        self.proactive_logged: dict[str, float] = {}  # session.id -> 記録済みの差し込み時刻
 
     async def start(self, app) -> None:
         self.record_dir.mkdir(parents=True, exist_ok=True)
@@ -296,7 +316,18 @@ class Judge:
         asyncio.create_task(self._glance(session, yaw, pitch))
         log.info("[%s] idle glance yaw=%d pitch=%d", session.device_id, yaw, pitch)
 
+    def _collect_proactive(self, session: Session) -> None:
+        """差し込み後の最初のロボット発話を「自分から言ったこと」として覚える。"""
+        at = session.last_injection_at
+        if not at or self.proactive_logged.get(session.id) == at:
+            return
+        said = next((text for role, text, t in session.transcript if role == "robot" and t > at), None)
+        if said:
+            self.recent_proactive.setdefault(session.device_id, deque(maxlen=RECENT_PROACTIVE)).append(said)
+            self.proactive_logged[session.id] = at
+
     async def judge(self, session: Session) -> None:
+        self._collect_proactive(session)
         self._maybe_check_presence(session)
         self._maybe_glance(session)
         mood = self._update_mood(session)
@@ -349,7 +380,7 @@ class Judge:
             if kind == "fixed_phrase":
                 mode, text = "verbatim", PHRASES[ans["phrase"]]
             else:
-                mode, text = "llm", LLM_INSTRUCTIONS[kind]
+                mode, text = "llm", with_recent(LLM_INSTRUCTIONS[kind], list(self.recent_proactive.get(session.device_id, [])))
             try:
                 await self.relay.send_emotion(session, ans["emotion"])
                 # 話しかける時は相手の方を向く（カメラで顔が見えていればその方向、応答は待たない）
@@ -426,7 +457,7 @@ class Judge:
         while True:
             await asyncio.sleep(INTERVAL)
             # 閉じたセッションの記録を捨てる（常時セッションでは無音タイムアウトのたびに開き直すので溜まる）
-            for ids in (self.dormant, self.next_glance_gap):
+            for ids in (self.dormant, self.next_glance_gap, self.proactive_logged):
                 for sid in [k for k in ids if k not in self.relay.sessions]:
                     del ids[sid]
             self.auto_seen &= self.relay.sessions.keys()
