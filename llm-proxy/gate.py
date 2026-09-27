@@ -94,9 +94,12 @@ async def brain_context(session: ClientSession) -> dict:
     return {k: s.get(k) for k in ("since_injection_s", "since_robot_s", "faces_in_view", "face_checked_s_ago")}
 
 
-def should_gate(payload: dict) -> str | None:
+def should_gate(payload: dict, headers) -> str | None:
     """ゲート対象ならユーザー発話を返す。"""
     if not ENABLED:
+        return None
+    # brain 自身の判定依頼（Jev が使えない時の LLM 代替判定）や、JSON を求める内部的な呼び出しは対象外
+    if headers.get("X-StackChan-Source") == "brain" or payload.get("response_format"):
         return None
     messages = payload.get("messages") or []
     if not messages or messages[-1].get("role") != "user":

@@ -256,7 +256,8 @@ class Judge:
         )
         body = {"model": FALLBACK_MODEL, "messages": [{"role": "user", "content": prompt}],
                 "response_format": {"type": "json_object"}, "max_tokens": 100}
-        async with self.client.post(f"{GATEWAY}/chat/completions", json=body) as r:
+        # brain 自身の判定依頼なので、llm-proxy の宛先ゲートにかけない目印を付ける
+        async with self.client.post(f"{GATEWAY}/chat/completions", json=body, headers={"X-StackChan-Source": "brain"}) as r:
             if r.status != 200:
                 raise RuntimeError(f"llm {r.status}: {(await r.text())[:200]}")
             data = await r.json()

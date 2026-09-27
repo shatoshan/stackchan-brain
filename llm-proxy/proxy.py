@@ -26,7 +26,8 @@ PORT = int(os.environ.get("LLM_PROXY_PORT", "8080"))
 LOG_BODY = os.environ.get("LLM_PROXY_LOG_BODY") == "1"
 
 # 上流へそのまま渡さないヘッダ
-HOP_HEADERS = {"host", "authorization", "content-length", "transfer-encoding", "connection", "accept-encoding"}
+HOP_HEADERS = {"host", "authorization", "content-length", "transfer-encoding", "connection", "accept-encoding",
+               "x-stackchan-source"}
 
 log = logging.getLogger("llm-proxy")
 
@@ -126,7 +127,7 @@ async def handle(request: web.Request) -> web.StreamResponse:
         if LOG_BODY:
             log.info("request body: %s", json.dumps(payload, ensure_ascii=False))
         # 宛先ゲート: ユーザー発話なら Jev で分類し、LLM を呼ばずに済むものは ここで返す
-        text = gate.should_gate(payload)
+        text = gate.should_gate(payload, request.headers)
         if text is not None:
             decision, reply = await gate.decide(request.app["session"], payload, text)
             if decision != "pass":

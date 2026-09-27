@@ -31,7 +31,8 @@ sources:
 # 置き場所
 
 - **llm-proxy。** xiaozhi-server が ASR の結果で LLM を呼ぶ直前の経路で、止められるのはここだけ。brain の中継は、LLM 呼び出しより前に文字起こしを見られない（stt は LLM 呼び出しとほぼ同時に流れる）。
-- 対象: `/chat/completions` で最後のメッセージが user のもの。ツール結果の続き、画像説明（VLLM）、brain が差し込む llm モードの指示（`（ロボットから話しかける場面です` で始まる）は対象外。[^code]
+- 対象: `/chat/completions` で最後のメッセージが user のもの。ツール結果の続き、画像説明（VLLM）、brain が差し込む llm モードの指示（`（ロボットから話しかける場面です` で始まる）、brain 自身の LLM 代替判定（ヘッダ `X-StackChan-Source: brain`、または `response_format` 付き）は対象外。[^code]
+  - 最初は brain の代替判定の依頼（「State of a small companion desk robot…」）までゲートにかけていた。実機試験の記録で発覚し、ヘッダで除外した。
 - ASR 由来の user メッセージは `{"content": "...", "language": "ja", "emotion": "😶"}` という JSON 文字列。疑似デバイスのテキストは素の文字列。両方扱う。[^code]
 
 # 状態と質問
@@ -50,6 +51,12 @@ sources:
 
 - 空の応答・相槌だけの応答を xiaozhi-server が問題なく扱うことは、偽の LLM を立てて確認した（空: 音声 0 フレーム、相槌: 読み上げ）。[^run-0927]
 - 判定は `data/llm-proxy/gate/YYYYMMDD.jsonl` に記録。`LLM_GATE_ENABLED=0` で無効。
+
+# 実機試験（2026-09-27）
+
+- BYOK が効く前（Jev 429）の家族の会話 3 件（日曜日の話、抱き枕の話）は fail-open で LLM に渡り、ロボットが会話に割り込んだ。同じ 3 件を BYOK 後の Jev で分類し直すと、3 件とも人宛て（ロボット宛て 0.21〜0.32）で止められた。実際の会話で家族の名前を含むので、公開の evals には入れない。[^run-0927]
+- BYOK 後に届いた発話は「左を向いて」「元に戻れ」などロボット宛ての 4 件で、すべて通した（ロボット宛て 0.74〜1.00、判定 0.33〜0.43 秒）。
+- テレビの音声は ASR の記録に出てこず、ゲートまで届いていない。Jev が使える状態で人同士の会話・テレビを試すのは未実施。
 
 # Jev の呼び先
 
