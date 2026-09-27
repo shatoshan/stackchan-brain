@@ -1,6 +1,9 @@
 # Update Log
 
 ## 2026-09-27
+* **Update**: human:shingo が宛先ゲートの実機記録 48 件にラベル。71 件 × 3 回で閾値 0.75〜0.85 が 66/71 の横ばいとなり、0.8 を維持。残る誤りは聞き取りの崩れたロボット宛て発話で、閾値では直らない。[宛先ゲート](/design/addressee-gate.md)。
+* **Update**: 宛先ゲートの閾値を実データで調整する仕組み（#14）。`evals/gate_label.py`（ラベル付け）、`evals/gate_sweep.py`（閾値の探索、Jev の答えを貯めて再計算）、llm-proxy の `/gate/decide`。23 件 × 3 回で 0.85 が 23/23、0.80 は 22/23。[宛先ゲート](/design/addressee-gate.md)。
+* **Decision**: 宛先ゲートで止めた発話も会話履歴に残す（human:shingo。独り言の後で話を振られることがあるため）。修正後 13 分の実機試験で暴走は再発せず、ゲートは 16 件を止め 6 件を通した。音声認識の崩れ（#14）と自発発話の質（#6）は残課題。[宛先ゲート](/design/addressee-gate.md)、[決定 012](/decisions/012-firmware-always-on-session.md)。
 * **Fix**: 常時セッションの実機試験で「暴走」。聞き取りの崩れた家族の会話を宛先ゲートが `unclear` として LLM に渡し、GPT-6 Luna が英語の思考メモを返答に混ぜて読み上げた。ゲートはロボット宛て < 0.8 なら不明でも止めるように、llm-proxy は英語の独り言が出たら以降の本文を捨てるように。[宛先ゲート](/design/addressee-gate.md)、[llm-proxy](/services/llm-proxy.md)。
 * **Update**: パッチ 0003 を実機に書き込み、AI Agent の待機 10 秒で自動で会話が開くことと、brain が目印を受け取ることを確認。開き直すたびに目の前の人へ「おかえり」と言う問題が見つかり、顔が見え続けている記録を次のセッションへ引き継ぐようにした。[決定 012](/decisions/012-firmware-always-on-session.md)、[brain](/services/brain.md)。
 * **Decision**: [決定 012](/decisions/012-firmware-always-on-session.md)（GitHub #1）。待機が 10 秒続いたら頭タッチと同じ経路で会話を開くパッチの設計と、ファームのソースで確かめたこと（開けないと警告音が鳴る、USB 給電中は電源が切れない、`SendMcpMessage` で目印を送れる）。human:shingo が承認し、パッチ `0003-always-on-session.patch` を作成・ビルド。[brain](/services/brain.md) に、自動で開いたセッションは休止から始めることと、「終了」の後 30 分は顔だけでは話しかけないことを実装。

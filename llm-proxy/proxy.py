@@ -179,6 +179,15 @@ async def gate_classify(request: web.Request) -> web.Response:
     return web.json_response(await gate.classify(request.app["session"], await request.json()))
 
 
+async def gate_decide(request: web.Request) -> web.Response:
+    """evals 用: 保存済みの Jev の答えと閾値から判定だけを返す（Jev は呼ばない）。
+    {"answers", "utterance", "robot_min"?, "min_confidence"?} -> {"decision"}"""
+    body = await request.json()
+    decision, _ = gate.decide_from_answers(body["answers"], body.get("utterance", ""), body.get("robot_min"),
+                                           body.get("min_confidence"))
+    return web.json_response({"decision": decision})
+
+
 async def on_startup(app: web.Application) -> None:
     app["session"] = ClientSession(timeout=ClientTimeout(total=300, sock_connect=10))
 
@@ -199,6 +208,7 @@ def main() -> None:
     app.router.add_get("/healthz", health)
     app.router.add_post("/jev/evaluate", jev_evaluate)
     app.router.add_post("/gate/classify", gate_classify)
+    app.router.add_post("/gate/decide", gate_decide)
     app.router.add_route("*", "/{path:.*}", handle)
     web.run_app(app, host="0.0.0.0", port=PORT, print=None)
 

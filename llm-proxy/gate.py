@@ -137,6 +137,32 @@ async def decide(session: ClientSession, payload: dict, text: str) -> tuple[str,
     return entry["decision"], entry.get("reply")
 
 
+def decide_from_answers(a: dict, utterance: str, robot_min: float | None = None,
+                        min_confidence: float | None = None) -> tuple[str, str | None]:
+    """Jev の答え（answers）から ("pass" | "backchannel" | "drop", 返す文) を決める。
+    閾値を変えて保存済みの答えで再計算できるよう分けてある（evals/gate_sweep.py が /gate/decide 経由で使う）。"""
+    robot_min = ROBOT_MIN if robot_min is None else robot_min
+    min_confidence = MIN_CONFIDENCE if min_confidence is None else min_confidence
+    who = a["addressee"]["choice"]
+    kind, kind_p = a["response"]["choice"], a["response"]["probabilities"].get(a["response"]["choice"], 0)
+    p_robot = a["addressee"]["probabilities"].get("robot", 0.0)
+    # ロボット宛ての確率が低ければ止める。「不明」が優勢でも止める（常時セッションでは、聞き取りの崩れた
+    # 家族の会話が unclear になり LLM に渡っていた。2026-09-27、ラベル付き 9 件はこの規則でも全問正解）。
+    # response の action は「ロボットへの操作」の意味なので、ロボット宛てでない時は見ない
+    # （「お母さん、醤油取って」は人宛ての頼みごとで action と分類される）
+    if p_robot < robot_min:
+        return "drop", None
+    if who == "robot" and kind == "none" and kind_p >= min_confidence:
+        # 相手の相槌（「へえ」「うん」）などに相槌で返すと不自然なので黙る
+        return "drop", None
+    if who == "robot" and kind == "backchannel" and kind_p >= min_confidence:
+        # 相手と同じ言葉を返さない（「へえ」に「へえ」と返していた）
+        spoken = utterance.strip("。、！？!? ")
+        choices = [b for b in BACKCHANNELS if b.strip("。") != spoken] or BACKCHANNELS
+        return "backchannel", random.choice(choices)
+    return "pass", None
+
+
 async def classify(session: ClientSession, state: dict) -> dict:
     """状態ブロブを Jev で分類して判定を返す（記録はしない。evals からも使う）。"""
     started = time.time()
@@ -148,25 +174,10 @@ async def classify(session: ClientSession, state: dict) -> dict:
                      latency_s=round(time.time() - started, 3))
         return entry
     a = res["answers"]
+    decision, reply = decide_from_answers(a, state["utterance"])
     who, who_p = a["addressee"]["choice"], a["addressee"]["probabilities"].get(a["addressee"]["choice"], 0)
     kind, kind_p = a["response"]["choice"], a["response"]["probabilities"].get(a["response"]["choice"], 0)
-    probs = a["addressee"]["probabilities"]
-    p_robot = probs.get("robot", 0.0)
-    decision, reply = "pass", None
-    # ロボット宛ての確率が低ければ止める。「不明」が優勢でも止める（常時セッションでは、聞き取りの崩れた
-    # 家族の会話が unclear になり LLM に渡っていた。2026-09-27、ラベル付き 9 件はこの規則でも全問正解）。
-    # response の action は「ロボットへの操作」の意味なので、ロボット宛てでない時は見ない
-    # （「お母さん、醤油取って」は人宛ての頼みごとで action と分類される）
-    if p_robot < ROBOT_MIN:
-        decision = "drop"
-    elif who == "robot" and kind == "none" and kind_p >= MIN_CONFIDENCE:
-        # 相手の相槌（「へえ」「うん」）などに相槌で返すと不自然なので黙る
-        decision = "drop"
-    elif who == "robot" and kind == "backchannel" and kind_p >= MIN_CONFIDENCE:
-        # 相手と同じ言葉を返さない（「へえ」に「へえ」と返していた）
-        spoken = state["utterance"].strip("。、！？!? ")
-        choices = [b for b in BACKCHANNELS if b.strip("。") != spoken] or BACKCHANNELS
-        decision, reply = "backchannel", random.choice(choices)
+    p_robot = a["addressee"]["probabilities"].get("robot", 0.0)
     entry.update(decision=decision, reply=reply, addressee=who, addressee_p=round(who_p, 3), p_robot=round(p_robot, 3), response=kind,
                  response_p=round(kind_p, 3), backend=res["backend"], latency_s=round(time.time() - started, 3), raw=a)
     return entry
