@@ -40,6 +40,13 @@ def normalize(text: str) -> str:
     return "".join(c for c in text if c not in PUNCT)
 
 
+# 接続を閉じる言葉（xiaozhi-server の exit_commands と同じ）。これで閉じた後はしばらく自分から話しかけない
+EXIT_WORDS = {w for w in os.environ.get("BRAIN_EXIT_WORDS", "終了,おしまい").split(",") if w}
+# 端末が会話を自動で開いた時に送る MCP 通知（firmware-patches の常時セッション、決定 012）。xiaozhi-server には流さない
+AUTO_OPEN_METHOD = "notifications/stackchan_brain/auto_open"
+# 前のセッションの最後に顔が見えてからこの秒数以内なら、次のセッションでも見え続けているとみなす
+FACE_CARRY_SECONDS = float(os.environ.get("BRAIN_FACE_CARRY_SECONDS", "90"))
+
 # brain が端末 MCP を直接呼ぶ時の JSON-RPC id。xiaozhi-server の id（小さい連番）とぶつからない範囲
 BRAIN_MCP_ID_BASE = 900_000
 
@@ -76,6 +83,7 @@ class Session:
     presence: dict = field(default_factory=dict)
     face_since: float = 0.0     # 顔が見え続けている開始時刻（0 なら見えていない）
     last_face_at: float = 0.0   # 最後に顔が見えた時刻
+    auto_opened: bool = False   # 端末が待機から自動で開いたセッション（人が開いたのではない）
 
     def info(self) -> dict:
         now = time.time()
@@ -88,6 +96,7 @@ class Session:
             "since_injection_s": round(now - self.last_injection_at) if self.last_injection_at else None,
             "faces_in_view": self.presence.get("faces") if self.presence else None,
             "face_checked_s_ago": round(now - self.presence["checked_at"]) if self.presence else None,
+            "auto_opened": self.auto_opened,
         }
 
 
@@ -100,6 +109,9 @@ class Relay:
         # 端末の写真送り先を brain に向ける（None なら書き換えない）
         self.vision_url = vision_url
         self.vision_upstream: dict[str, str] = {}  # device_id -> xiaozhi-server の元の vision URL
+        self.last_exit_at: dict[str, float] = {}   # device_id -> 「終了」で会話が閉じた時刻
+        # device_id -> (顔が見え始めた時刻, 最後に見えた時刻)。セッションを開き直しても「見え続けている」を引き継ぐ
+        self.device_face: dict[str, tuple[float, float]] = {}
 
     async def start(self, app: web.Application) -> None:
         self.client = ClientSession()
@@ -204,11 +216,15 @@ class Relay:
                 continue
             session.presence = dict(result, checked_at=now)
             if result.get("faces"):
-                session.last_face_at = now
                 if not session.face_since:
-                    session.face_since = now
+                    # 直前のセッションから顔が見え続けているなら、今来たのではない（開き直すたびに「おかえり」と言わない）
+                    since, last = self.device_face.get(device_id, (0.0, 0.0))
+                    session.face_since = since if since and now - last <= FACE_CARRY_SECONDS else now
+                session.last_face_at = now
+                self.device_face[device_id] = (session.face_since, now)
             else:
                 session.face_since = 0.0
+                self.device_face.pop(device_id, None)
             self._record(session, "presence", result)
 
     async def send_emotion(self, session: Session, emotion: str) -> None:
@@ -250,8 +266,13 @@ class Relay:
                     await sink.send_str(msg.data)
                     self._record(session, direction, msg.data)
                     continue
-                # brain が呼んだ端末 MCP ツールの応答は xiaozhi-server に流さず brain で受け取る
+                # brain が呼んだ端末 MCP ツールの応答と、自動で開いた目印は xiaozhi-server に流さず brain で受け取る
                 if direction == "up" and data.get("type") == "mcp":
+                    if (data.get("payload") or {}).get("method") == AUTO_OPEN_METHOD:
+                        session.auto_opened = True
+                        self._record(session, "brain-up", data)
+                        log.info("[%s] session %s opened automatically", session.device_id, session.id)
+                        continue
                     rpc_id = (data.get("payload") or {}).get("id")
                     if rpc_id in session.mcp_pending:
                         fut = session.mcp_pending.pop(rpc_id)
@@ -327,6 +348,10 @@ class Relay:
             await upstream_ws.close()
             await device_ws.close(code=code)
             self.sessions.pop(sid, None)
+            # 最後のユーザー発話が「終了」なら、次のセッション（自動で開き直したもの）でしばらく黙る
+            last_user = next((text for role, text, _ in reversed(session.transcript) if role == "user"), "")
+            if closed_by == "server" and normalize(last_user) in EXIT_WORDS:
+                self.last_exit_at[device_id] = time.time()
             self._record(session, "meta", {"type": "closed", "by": closed_by, "code": code})
             log.info("[%s] session %s closed by %s (code %s, %.0fs)", device_id, sid, closed_by, code, time.time() - started)
         return device_ws

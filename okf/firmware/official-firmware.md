@@ -51,7 +51,8 @@ sources:
 
 # stackchan-brain のパッチ
 
-- 近接センサ（LTR-553）は公式ファームでは未使用。パッチで使う案（[決定 009](/decisions/009-firmware-proximity-wake.md)）は検知距離が数 cm で不採用。現在パッチは当てていない。
+- 近接センサ（LTR-553）は公式ファームでは未使用。パッチで使う案（[決定 009](/decisions/009-firmware-proximity-wake.md)）は検知距離が数 cm で不採用。
+- 適用中のパッチは `firmware-patches/` の 0002（シャッター音、[決定 010](/decisions/010-firmware-silent-shutter.md)）と 0003（常時セッション、[決定 012](/decisions/012-firmware-always-on-session.md)）。
 - カメラは AI Agent 起動時に初期化され取り込みは動いているが、端末上の解析は無く、`take_photo` の時だけ 1 枚送る（→ [カメラで在席を知る](/design/camera-presence.md)）。
 
 # AI エージェント部分

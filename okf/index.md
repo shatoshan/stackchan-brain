@@ -54,6 +54,7 @@ okf_version: "0.2"
 * [009: 近接センサで会話を開くファームパッチ](decisions/009-firmware-proximity-wake.md) - センサが数 cm しか検知できず不採用。（deprecated）
 * [010: シャッター音を消すファームパッチ](decisions/010-firmware-silent-shutter.md) - 原則2に firmware-patches/ の最小パッチの例外を設ける。
 * [011: 常時稼働は USB 給電前提](decisions/011-usb-powered.md) - バッテリー駆動時間と発熱は評価しない。
+* [012: 常時セッション](decisions/012-firmware-always-on-session.md) - 待機が続いたら端末から会話を開き、話すか黙るかは brain が決める。（draft、実機試験待ち）
 
 # runbooks — 手順書
 

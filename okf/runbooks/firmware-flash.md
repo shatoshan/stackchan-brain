@@ -49,7 +49,8 @@ cd StackChan && git checkout 1b5765599fba8aaad1811d9a79358ccc7051f5f3
 cd firmware && python3 ./fetch_repos.py        # "Applied patch ... xiaozhi-esp32.patch" が出ることを確認
 printf 'CONFIG_OTA_URL="http://<MacのLAN IP>:8003/xiaozhi/ota/"\n' > sdkconfig.defaults.local
 git -C ~/esp/StackChan apply <stackchan-brain>/firmware-patches/0002-silent-camera-shutter.patch   # 決定 010
-idf.py build
+git -C ~/esp/StackChan apply <stackchan-brain>/firmware-patches/0003-always-on-session.patch    # 決定 012（新規ファイルあり）
+idf.py reconfigure && idf.py build
 grep OTA_URL sdkconfig                          # 上書きされたか確認
 ```
 

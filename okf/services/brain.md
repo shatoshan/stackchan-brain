@@ -21,6 +21,9 @@ sources:
   - id: m3-head
     resource: process:claude-code-session-2026-09-26
     title: 2026-09-26 M3 首振り試験（/head と判定ループ、実機）
+  - id: always-on
+    resource: /decisions/012-firmware-always-on-session.md
+    title: 決定 012（案）常時セッション
 ---
 
 # 役割
@@ -58,7 +61,9 @@ curl -s -X POST 127.0.0.1:8011/say -d '{"mode":"llm","text":"（ロボットか�
 - 5 秒ごとに中継中のセッションを見て、ルールで絞ってから Jev（llm-proxy の `/jev/evaluate`。呼び先は llm-proxy の `JEV_BACKEND` で決まり、brain はキーを持たない）に判定させ、話すなら表情を送ってから `/say` と同じ処理で差し込む。質問と閾値は [直感層の質問設計](/design/jev-questions.md)。
 - Jev が 429 / エラーなら 60 秒から最大 10 分まで倍々で Jev を止め、その間は LLM（`LLM_MODEL`）に同じ分類を JSON で答えさせる。LLM 判定は 1 台あたり 30 秒に 1 回まで。
 - 判定はすべて `data/brain/judgments/YYYYMMDD.jsonl` に記録（状態ブロブ、閾値、答え、Jev の生の確率、行動）。evals の素材にする。
-- まだ誰も話していないセッション（ウェイクワードや近接センサで開いた直後）は、開いて 5 秒（`BRAIN_QUIET_AFTER_OPEN`）で判定に入る。会話が始まった後は 20 秒ルール。
+- まだ誰も話していないセッション（ウェイクワードやタッチで開いた直後）は、開いて 5 秒（`BRAIN_QUIET_AFTER_OPEN`）で判定に入る。会話が始まった後は 20 秒ルール。
+- **自動で開いたセッション**（端末が MCP 通知 `notifications/stackchan_brain/auto_open` を送ってきたもの。中継は xiaozhi-server に流さない）は休止から始め、人が話すか顔が新しく映るまで判定しない。[^always-on]
+- 最後のユーザー発話が `終了` / `おしまい`（`BRAIN_EXIT_WORDS`）でサーバーが閉じたら、その端末は 30 分（`BRAIN_QUIET_AFTER_EXIT`）の間、休止中に顔が映っても判定を再開しない（人が話せば再開）。[^always-on]
 - 機嫌（0〜1、初期 0.6）は、自発発話に返事があれば +0.1、なければ −0.1。
 - 表情は判定結果を `{"type":"llm","emotion":...}` として brain から端末へ直接送る。
 - 首: 話しかける時は正面（yaw 0、pitch 20）を向く。聞き取り中に 25 秒以上誰も話さないと、30〜60 秒のランダムな間隔でよそ見（yaw ±15〜35、pitch 10〜30）して 2.5〜4.5 秒で正面に戻る。よそ見は判定を休止したセッションでも続ける。
@@ -68,6 +73,7 @@ curl -s -X POST 127.0.0.1:8011/say -d '{"mode":"llm","text":"（ロボットか�
 
 - 写真の受け口（`brain/vision.py`、8012）と、15 秒ごとの `take_photo` による顔検出。詳細は [カメラで在席を知る](/design/camera-presence.md)。
 - 「相手が離れた」で判定を休止していても、休止後にカメラに顔が新しく映ったら判定を再開する。
+- 顔が見え続けているかは端末ごとにも覚えておき、直前のセッションの最後に顔が見えてから 90 秒以内（`BRAIN_FACE_CARRY_SECONDS`）なら、開き直したセッションでも「新しく映った」とはしない。[^always-on]
 
 # 端末 MCP ツールの直接呼び出し
 
@@ -87,3 +93,4 @@ curl -s -X POST 127.0.0.1:8011/say -d '{"mode":"llm","text":"（ロボットか�
 [^m3-relay]: 2026-09-26 M3 ステップ1 試験
 [^m3-inject]: 2026-09-26 M3 ステップ2 差し込み試験
 [^m3-head]: 2026-09-26 M3 首振り試験
+[^always-on]: 決定 012（案）常時セッション

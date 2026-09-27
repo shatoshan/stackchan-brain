@@ -1,0 +1,113 @@
+diff --git a/firmware/main/hal/hal.cpp b/firmware/main/hal/hal.cpp
+index 3ca8a14..6338cc8 100644
+--- a/firmware/main/hal/hal.cpp
++++ b/firmware/main/hal/hal.cpp
+@@ -176,6 +176,9 @@ static void _stackchan_update_task(void* param)
+     }
+ }
+ 
++// stackchan-brain: hal_always_on.cpp
++void hal_start_always_on();
++
+ void Hal::startXiaozhi()
+ {
+     mclog::tagInfo(_tag, "start xiaozhi");
+@@ -199,6 +202,9 @@ void Hal::startXiaozhi()
+     // Start stackchan update task
+     xTaskCreatePinnedToCore(_stackchan_update_task, "stackchan", 4096, NULL, 3, NULL, 1);
+ 
++    // stackchan-brain: 待機が続いたら会話を開く（start_xiaozhi_app は戻らないので先に起動）
++    hal_start_always_on();
++
+     hal_bridge::start_xiaozhi_app();
+ }
+ 
+diff --git a/firmware/main/hal/hal_always_on.cpp b/firmware/main/hal/hal_always_on.cpp
+new file mode 100644
+index 0000000..cde177c
+--- /dev/null
++++ b/firmware/main/hal/hal_always_on.cpp
+@@ -0,0 +1,83 @@
++/*
++ * stackchan-brain: always-on session
++ *
++ * AI Agent が待機中（未接続）の状態が続いたら、頭タッチと同じ経路で会話セッションを開く。
++ * 開けたら MCP 通知で「自動で開いた」ことをサーバーに知らせる（brain の中継が受け取って捨てる）。
++ * 何を話すか・黙るかはサーバー側（brain）が決める。
++ * 根拠: stackchan-brain okf/decisions/012-firmware-always-on-session.md
++ */
++#include "application.h"
++#include "board/hal_bridge.h"
++#include <mooncake_log.h>
++#include <freertos/FreeRTOS.h>
++#include <freertos/task.h>
++#include <esp_timer.h>
++#include <algorithm>
++
++static const std::string_view _tag = "HAL-AlwaysOn";
++
++static constexpr int64_t OPEN_AFTER_IDLE_MS = 10000;   // 待機がこれだけ続いたら会話を開く
++static constexpr int64_t LISTEN_WAIT_MS     = 15000;   // 開いてから聞き取りに入るまで待つ時間
++static constexpr int64_t BACKOFF_MIN_MS     = 30000;   // 開けなかった時の待ち（失敗のたびに倍。開けないとエラー音が鳴るため）
++static constexpr int64_t BACKOFF_MAX_MS     = 600000;
++static constexpr int64_t POLL_MS            = 500;
++
++static constexpr const char* AUTO_OPEN_NOTIFICATION =
++    "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/stackchan_brain/auto_open\"}";
++
++static int64_t now_ms()
++{
++    return esp_timer_get_time() / 1000;
++}
++
++static void always_on_task(void*)
++{
++    auto& app = Application::GetInstance();
++    while (!hal_bridge::is_xiaozhi_ready()) {
++        vTaskDelay(pdMS_TO_TICKS(POLL_MS));
++    }
++    mclog::tagInfo(_tag, "ready");
++
++    int64_t idle_since = now_ms();
++    int64_t wait_ms    = OPEN_AFTER_IDLE_MS;
++    int64_t backoff_ms = BACKOFF_MIN_MS;
++
++    while (true) {
++        vTaskDelay(pdMS_TO_TICKS(POLL_MS));
++        if (app.GetDeviceState() != kDeviceStateIdle) {
++            idle_since = now_ms();
++            continue;
++        }
++        if (now_ms() - idle_since < wait_ms) {
++            continue;
++        }
++
++        mclog::tagInfo(_tag, "idle for {}ms, opening chat", now_ms() - idle_since);
++        hal_bridge::toggle_xiaozhi_chat_state();
++
++        bool listening       = false;
++        const int64_t opened = now_ms();
++        while (now_ms() - opened < LISTEN_WAIT_MS) {
++            vTaskDelay(pdMS_TO_TICKS(POLL_MS));
++            if (app.GetDeviceState() == kDeviceStateListening) {
++                listening = true;
++                break;
++            }
++        }
++        if (listening) {
++            app.SendMcpMessage(AUTO_OPEN_NOTIFICATION);
++            wait_ms    = OPEN_AFTER_IDLE_MS;
++            backoff_ms = BACKOFF_MIN_MS;
++        } else {
++            wait_ms    = backoff_ms;
++            backoff_ms = std::min(BACKOFF_MAX_MS, backoff_ms * 2);
++            mclog::tagWarn(_tag, "chat did not open, retry in {}s", wait_ms / 1000);
++        }
++        idle_since = now_ms();
++    }
++}
++
++void hal_start_always_on()
++{
++    xTaskCreatePinnedToCore(always_on_task, "always_on", 4096, NULL, 2, NULL, 1);
++}

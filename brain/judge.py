@@ -30,7 +30,7 @@ INTERVAL = float(os.environ.get("BRAIN_JUDGE_INTERVAL", "5"))
 # ルールによる足切り（秒・回数）
 QUIET_AFTER_USER = float(os.environ.get("BRAIN_QUIET_AFTER_USER", "20"))
 QUIET_AFTER_ROBOT = float(os.environ.get("BRAIN_QUIET_AFTER_ROBOT", "20"))
-# まだ誰も話していないセッション（ウェイクワードや近接センサで開いた直後）は早めに判定する
+# まだ誰も話していないセッション（ウェイクワードやタッチで開いた直後）は早めに判定する
 QUIET_AFTER_OPEN = float(os.environ.get("BRAIN_QUIET_AFTER_OPEN", "5"))
 MIN_INJECTION_GAP = float(os.environ.get("BRAIN_MIN_INJECTION_GAP", "60"))
 MAX_INJECTIONS_PER_SESSION = int(os.environ.get("BRAIN_MAX_INJECTIONS_PER_SESSION", "4"))
@@ -90,6 +90,8 @@ PRESENCE_INTERVAL_DORMANT = float(os.environ.get("BRAIN_PRESENCE_INTERVAL_DORMAN
 PRESENCE_FRESH = float(os.environ.get("BRAIN_PRESENCE_FRESH", "30"))  # これより古い確認結果は使わない
 CAMERA_HFOV = float(os.environ.get("BRAIN_CAMERA_HFOV", "60"))      # 水平画角（度）。顔の位置→首の yaw
 CAMERA_YAW_SIGN = float(os.environ.get("BRAIN_CAMERA_YAW_SIGN", "1"))  # 画像の右が yaw の正なら 1
+# 「終了」で閉じた後、自動で開き直したセッションでも、この秒数はカメラに顔が映っただけでは話しかけない
+QUIET_AFTER_EXIT = float(os.environ.get("BRAIN_QUIET_AFTER_EXIT", "1800"))
 IDLE_GLANCE_GAP = (float(os.environ.get("BRAIN_IDLE_GLANCE_GAP_MIN", "30")), float(os.environ.get("BRAIN_IDLE_GLANCE_GAP_MAX", "60")))
 
 # llm モードで LLM に渡す指示（会話履歴には user 発話として残る）
@@ -164,6 +166,7 @@ class Judge:
         # session.id -> 判定時点の last_user_at
         self.dormant: dict[str, float] = {}
         self.next_glance_gap: dict[str, float] = {}  # session.id -> 次のよそ見までの間隔
+        self.auto_seen: set[str] = set()  # 自動で開いたセッションのうち、休止に入れたもの
 
     async def start(self, app) -> None:
         self.record_dir.mkdir(parents=True, exist_ok=True)
@@ -297,10 +300,16 @@ class Judge:
         self._maybe_check_presence(session)
         self._maybe_glance(session)
         mood = self._update_mood(session)
+        if session.auto_opened and session.id not in self.auto_seen:
+            # 端末が自動で開いたセッションは、誰かに起こされたわけではない。話すか顔が映るまで休止から始める
+            self.auto_seen.add(session.id)
+            self.dormant[session.id] = session.started_at
         if session.id in self.dormant:
             since = self.dormant[session.id]
-            # ユーザーが話すか、休止後にカメラに顔が新しく映ったら判定を再開する
-            if session.last_user_at <= since and session.face_since <= since:
+            exited = self.relay.last_exit_at.get(session.device_id, 0)
+            # ユーザーが話すか、休止後にカメラに顔が新しく映ったら判定を再開する（「終了」の後しばらくは話した時だけ）
+            face_wakes = session.face_since > since and time.time() - exited > QUIET_AFTER_EXIT
+            if session.last_user_at <= since and not face_wakes:
                 return
             del self.dormant[session.id]
         reason = self._gate(session)
@@ -416,6 +425,11 @@ class Judge:
     async def loop(self) -> None:
         while True:
             await asyncio.sleep(INTERVAL)
+            # 閉じたセッションの記録を捨てる（常時セッションでは無音タイムアウトのたびに開き直すので溜まる）
+            for ids in (self.dormant, self.next_glance_gap):
+                for sid in [k for k in ids if k not in self.relay.sessions]:
+                    del ids[sid]
+            self.auto_seen &= self.relay.sessions.keys()
             for session in list(self.relay.sessions.values()):
                 try:
                     await self.judge(session)
