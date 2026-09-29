@@ -8,6 +8,7 @@ from pathlib import Path
 from aiohttp import web
 
 from judge import Judge
+from memory import Memory
 from relay import create_app, create_control_app
 from vision import create_vision_app
 
@@ -15,8 +16,14 @@ from vision import create_vision_app
 async def serve() -> None:
     relay_app = create_app()
     control_app = create_control_app(relay_app["relay"])
+    # 会話の記憶（セッションが閉じたら要約。xiaozhi-server は context_providers で GET /context を呼ぶ）
+    memory = Memory(Path(os.environ.get("BRAIN_MEMORY_DIR", "/data/memory")))
+    relay_app["relay"].on_closed.append(memory.on_session_closed)
+    control_app.on_startup.append(memory.start)
+    control_app.on_cleanup.append(memory.stop)
+    control_app.router.add_get("/context", memory.context)
     if os.environ.get("BRAIN_JUDGE_ENABLED", "1") == "1":
-        judge = Judge(relay_app["relay"], Path(os.environ.get("BRAIN_JUDGMENT_DIR", "/data/judgments")))
+        judge = Judge(relay_app["relay"], Path(os.environ.get("BRAIN_JUDGMENT_DIR", "/data/judgments")), memory)
         control_app.on_startup.append(judge.start)
         control_app.on_cleanup.append(judge.stop)
     vision_app = create_vision_app(relay_app["relay"], Path(os.environ.get("BRAIN_CAMERA_DIR", "/data/camera")))

@@ -141,7 +141,7 @@ def person_state(session: Session) -> dict | None:
     }
 
 
-def build_state(session: Session, mood: float) -> dict:
+def build_state(session: Session, mood: float, memory: str = "") -> dict:
     """状態ブロブ（okf/design/state-blob.md の暫定版）。"""
     now = time.time()
     lt = time.localtime(now)
@@ -155,6 +155,7 @@ def build_state(session: Session, mood: float) -> dict:
         "proactive_utterances_this_session": session.injections,
         "mood": round(mood, 2),
         "person": person_state(session),  # カメラ（None は未確認）
+        "memory": memory or None,  # これまでの会話の要約（brain/memory.py）
     }
 
 
@@ -173,8 +174,9 @@ QUESTIONS = {
 
 
 class Judge:
-    def __init__(self, relay: Relay, record_dir: Path):
+    def __init__(self, relay: Relay, record_dir: Path, memory=None):
         self.relay = relay
+        self.memory = memory  # brain/memory.py の Memory（無ければ記憶なし）
         self.record_dir = record_dir
         self.mood: dict[str, float] = {}      # device_id -> 0..1
         self.pending: dict[str, float] = {}   # device_id -> 差し込み時刻（反応を見て機嫌を更新する）
@@ -350,7 +352,7 @@ class Judge:
         reason = self._gate(session)
         if reason:
             return
-        state = build_state(session, mood)
+        state = build_state(session, mood, self.memory.get(session.device_id) if self.memory else "")
         started = time.time()
         ans = None
         source = "jev"

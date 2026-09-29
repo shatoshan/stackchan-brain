@@ -39,6 +39,7 @@ okf_version: "0.2"
 * [状態ブロブ仕様](design/state-blob.md) - 直感層に毎周期渡す固定フォーマット JSON。（draft）
 * [カメラで在席を知る](design/camera-presence.md) - ファーム無改変で使えるカメラ経路の調査。take_photo の送り先を brain に向ける案。（draft）
 * [宛先ゲート](design/addressee-gate.md) - LLM を呼ぶ前に Jev で発話の宛先と返事の要否を分類する。（draft）
+* [会話の記憶](design/conversation-memory.md) - 会話を日本語で要約して端末ごとに保存し、xiaozhi-server と状態ブロブに渡す。（draft）
 * [直感層の質問設計](design/jev-questions.md) - Jev に状況を分類させる理由、ルール・閾値との分担、evals。（draft）
 
 # decisions — 決定記録

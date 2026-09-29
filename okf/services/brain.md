@@ -76,6 +76,10 @@ curl -s -X POST 127.0.0.1:8011/say -d '{"mode":"llm","text":"（ロボットか�
 - 「相手が離れた」で判定を休止していても、休止後にカメラに顔が新しく映ったら判定を再開する。
 - 顔が見え続けているかは端末ごとにも覚えておき、直前のセッションの最後に顔が見えてから 90 秒以内（`BRAIN_FACE_CARRY_SECONDS`）なら、開き直したセッションでも「新しく映った」とはしない。[^always-on]
 
+# 会話の記憶（`brain/memory.py`）
+
+- セッションが閉じたら会話を要約して `data/brain/memory/<MAC>.json` を更新。操作 API の `GET /context`（xiaozhi-server の `context_providers` 用、`device-id` ヘッダ）で返し、状態ブロブの `memory` にも入れる。→ [会話の記憶](/design/conversation-memory.md)
+
 # 端末 MCP ツールの直接呼び出し
 
 - brain は `{"type":"mcp","payload":{"method":"tools/call",...}}` を端末へ直接送る。JSON-RPC の id は 900000 台（xiaozhi-server の小さい連番とぶつからない）。端末からの応答は brain が受け取り、xiaozhi-server には流さない。[^code]

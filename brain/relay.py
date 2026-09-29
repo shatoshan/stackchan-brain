@@ -115,6 +115,7 @@ class Relay:
         self.vision_url = vision_url
         self.vision_upstream: dict[str, str] = {}  # device_id -> xiaozhi-server の元の vision URL
         self.last_exit_at: dict[str, float] = {}   # device_id -> 「終了」で会話が閉じた時刻
+        self.on_closed: list = []  # セッションが閉じた時に呼ぶ関数（session を渡す。記憶の更新など）
         # device_id -> (顔が見え始めた時刻, 最後に見えた時刻)。セッションを開き直しても「見え続けている」を引き継ぐ
         self.device_face: dict[str, tuple[float, float]] = {}
 
@@ -371,6 +372,11 @@ class Relay:
             if closed_by == "server" and normalize(last_user) in EXIT_WORDS:
                 self.last_exit_at[device_id] = time.time()
             self._record(session, "meta", {"type": "closed", "by": closed_by, "code": code})
+            for callback in self.on_closed:
+                try:
+                    callback(session)
+                except Exception as e:  # noqa: BLE001 後始末の失敗で中継を止めない
+                    log.warning("[%s] on_closed failed: %s", device_id, e)
             log.info("[%s] session %s closed by %s (code %s, %.0fs)", device_id, sid, closed_by, code, time.time() - started)
         return device_ws
 

@@ -43,6 +43,10 @@ VAD:
   SileroVAD:
     min_silence_duration_ms: ${XIAOZHI_VAD_SILENCE_MS}
 
+# 会話の開始時に GET し、システムプロンプトの {{ dynamic_context }} に入れる（brain の会話の記憶、#5）
+context_providers:
+  - url: http://brain:8011/context
+
 # 無音タイムアウトで切る時に LLM へ送るお別れ指示（デフォルトは中国語）。自律発話では不要なので切る
 end_prompt:
   enable: false

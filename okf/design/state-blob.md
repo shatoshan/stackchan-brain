@@ -37,7 +37,7 @@ sources:
 | `mood` | 機嫌スコア |
 | `utterances_today` | 本日の発話回数 |
 | `events` | 外部イベント（option-quants シグナル等、MCP 経由） |
-| `memory` | 前回セッションの要約（LLM が生成） |
+| `memory` | これまでの会話の記憶（日本語の箇条書き、→ [会話の記憶](/design/conversation-memory.md)）。無ければ null |
 
 [^kickoff]
 

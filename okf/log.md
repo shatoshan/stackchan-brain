@@ -1,5 +1,8 @@
 # Update Log
 
+## 2026-09-29
+* **Creation**: [会話の記憶](/design/conversation-memory.md)（draft、#5）。セッションが閉じたら brain が日本語で要約して端末ごとに保存し、`context_providers`（`GET /context`）と状態ブロブの `memory` に渡す。内蔵の `mem_local_short` は要約の指示も形式も中国語なので使わない。過去の実機ログ 4 件で試し、疑似端末で「名前・予定」を覚えて次のセッションで答えることを確認。
+
 ## 2026-09-27
 * **Update**: カメラ在席確認の改善（#8）。撮影が返らない 19 件はすべて端末が黙って抜けた後だったので、端末 MCP が 2 回続けて返らなければ brain からセッションを閉じる。話しかける時に pitch も顔に合わせる（符号・画角は実機未確認）。[カメラで在席を知る](/design/camera-presence.md)、[brain](/services/brain.md)。
 * **Update**: 自発発話の質（#6）。実機 35 件の傾向（自分の発言をなぞる・反省する、同じ質問の繰り返し、「ねえねえ」だけ、ツールの読み上げ）から、指示文の改訂、最近の自発発話 5 件を添えて繰り返しを避ける、「ねえねえ。」の削除、brain の指示に `tool_choice: none`。[直感層の質問設計](/design/jev-questions.md)、[llm-proxy](/services/llm-proxy.md)。
