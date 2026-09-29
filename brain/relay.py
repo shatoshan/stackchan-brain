@@ -47,6 +47,10 @@ AUTO_OPEN_METHOD = "notifications/stackchan_brain/auto_open"
 # 前のセッションの最後に顔が見えてからこの秒数以内なら、次のセッションでも見え続けているとみなす
 FACE_CARRY_SECONDS = float(os.environ.get("BRAIN_FACE_CARRY_SECONDS", "90"))
 
+# 端末 MCP の呼び出しがこの回数続けて返らなければ、端末はもういない（ホームに戻った等）とみなして閉じる。
+# 端末は接続を閉じずに抜けることがあり、閉じるまで約 80 秒、brain が撮影・首・発話を空打ちしていた（#8、2026-09-27）
+MCP_TIMEOUTS_TO_ABANDON = int(os.environ.get("BRAIN_MCP_TIMEOUTS_TO_ABANDON", "2"))
+
 # brain が端末 MCP を直接呼ぶ時の JSON-RPC id。xiaozhi-server の id（小さい連番）とぶつからない範囲
 BRAIN_MCP_ID_BASE = 900_000
 
@@ -84,6 +88,7 @@ class Session:
     face_since: float = 0.0     # 顔が見え続けている開始時刻（0 なら見えていない）
     last_face_at: float = 0.0   # 最後に顔が見えた時刻
     auto_opened: bool = False   # 端末が待機から自動で開いたセッション（人が開いたのではない）
+    mcp_timeouts: int = 0       # 端末 MCP の呼び出しが続けて返らなかった回数
 
     def info(self) -> dict:
         now = time.time()
@@ -244,9 +249,22 @@ class Relay:
         await session.device_ws.send_str(json.dumps(msg, ensure_ascii=False))
         self._record(session, "brain-down", msg)
         try:
-            return await asyncio.wait_for(fut, timeout)
+            result = await asyncio.wait_for(fut, timeout)
+            session.mcp_timeouts = 0
+            return result
+        except asyncio.TimeoutError:
+            session.mcp_timeouts += 1
+            if session.mcp_timeouts >= MCP_TIMEOUTS_TO_ABANDON and session.id in self.sessions:
+                asyncio.create_task(self._abandon(session, f"{session.mcp_timeouts} device calls unanswered ({name})"))
+            raise
         finally:
             session.mcp_pending.pop(rpc_id, None)
+
+    async def _abandon(self, session: Session, reason: str) -> None:
+        """応答しない端末のセッションを閉じる（片側を閉じれば handle() がもう片側も閉じて後始末する）。"""
+        log.warning("[%s] session %s: %s, closing", session.device_id, session.id, reason)
+        self._record(session, "meta", {"type": "abandon", "reason": reason})
+        await session.device_ws.close(code=1001, message=b"device unresponsive")
 
     async def move_head(self, session: Session, yaw: int, pitch: int, speed: int = 200) -> dict:
         result = await self.call_device_tool(session, "self.robot.set_head_angles",

@@ -75,6 +75,8 @@ sources:
 - それ以外（LLM が撮らせた写真）は元の xiaozhi-server の `/mcp/vision/explain` へ転送。VLLM は llm-proxy 経由の GPT-6 Luna。
 - 状態ブロブの `person`: `faces_in_view`、`largest_face_width_ratio`、`seconds_face_visible`、`seconds_since_face_seen`、`checked_seconds_ago`（30 秒より古い結果は null）。
 - 話しかける時、顔が見えていれば `get_head_angles` の現在値に `(center_x − 0.5) × 60° × 符号` を足した yaw を向く（`BRAIN_CAMERA_HFOV`、`BRAIN_CAMERA_YAW_SIGN`）。
+- pitch も追う（#8、2026-09-27）: 現在値に `(0.5 − center_y) × 47° × 符号` を足し、5〜60 に収める（`BRAIN_CAMERA_VFOV`、`BRAIN_CAMERA_PITCH_SIGN`）。垂直画角は水平 60° と 4:3 から 2·atan(tan 30°·3/4) ≈ 47° と計算した値。pitch は 90 が上、画像の y は下向きに増えるので「顔が画像の上にあれば首を上げる」。実機では顔が画像の下寄り（center_y ≈ 0.75）に写ることが多く、pitch 20 → 8 程度に下がる。**符号と画角は実機で未確認**。
+- **撮影が返らない原因**（#8、2026-09-27）: 実機の撮影 64 件のうち 45 件は 0.5 秒前後（最大 0.7 秒）で返り、返らなかった 19 件は**すべて**端末が接続を閉じずに抜けた（ホームに戻した等、最後は 1006）セッションの最後の約 80 秒に集中していた。カメラの問題ではなく、端末がいないことに brain が気づけていなかった。→ 端末 MCP の呼び出しが 2 回続けて返らなければ brain からセッションを閉じる（`BRAIN_MCP_TIMEOUTS_TO_ABANDON`、[brain](/services/brain.md)）。
 
 # 実測（2026-09-26、実機）
 

@@ -35,6 +35,7 @@ sources:
 
 - 端末の `Authorization` / `Protocol-Version` / `Device-Id` / `Client-Id` ヘッダとクエリ文字列を上流へ引き継ぐ。テキストもバイナリ（Opus）もそのまま双方向に流す。[^code]
 - 片側が閉じたらもう片側も閉じる。どちらが先に閉じたか（`device` / `server`）を記録する。[^code]
+- 端末は接続を閉じずに抜けることがある（ホームに戻した時など。閉じるまで約 80 秒）。brain が呼んだ端末 MCP ツールが 2 回続けて返らなければ、端末はいないとみなして brain から閉じる（`BRAIN_MCP_TIMEOUTS_TO_ABANDON`、記録は `meta` の `abandon`）。
 - セッションごとに `data/brain/sessions/<日時>-<MAC>-<id>.jsonl` へ JSON メッセージを 1 行ずつ記録（`{"t", "dir": "up"|"down"|"meta", "msg"}`）。2000 文字を超えるもの（`tools/list` の結果など）は型と長さだけ。音声は記録しない。[^code]
 - 標準ログには発話（`user:`）、返答（`robot:`）、ツール呼び出し、hello / listen / abort を要約して出す。[^code]
 - ポート 8010 は LAN に公開する（端末が直接繋ぐため）。`GET /healthz` でヘルスチェック。

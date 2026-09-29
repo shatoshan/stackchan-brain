@@ -91,6 +91,10 @@ PRESENCE_INTERVAL_DORMANT = float(os.environ.get("BRAIN_PRESENCE_INTERVAL_DORMAN
 PRESENCE_FRESH = float(os.environ.get("BRAIN_PRESENCE_FRESH", "30"))  # これより古い確認結果は使わない
 CAMERA_HFOV = float(os.environ.get("BRAIN_CAMERA_HFOV", "60"))      # 水平画角（度）。顔の位置→首の yaw
 CAMERA_YAW_SIGN = float(os.environ.get("BRAIN_CAMERA_YAW_SIGN", "1"))  # 画像の右が yaw の正なら 1
+# 垂直画角（度）。水平 60° と画像の 4:3 から 2·atan(tan(30°)·3/4) ≈ 47°。pitch は 90 が上、画像の y は下向きに増える
+CAMERA_VFOV = float(os.environ.get("BRAIN_CAMERA_VFOV", "47"))
+CAMERA_PITCH_SIGN = float(os.environ.get("BRAIN_CAMERA_PITCH_SIGN", "1"))  # 画像の上が pitch の正（上向き）なら 1
+PITCH_RANGE = (5, 60)  # 顔を追う時の pitch の範囲（端末の範囲は 0〜90）
 # 「終了」で閉じた後、自動で開き直したセッションでも、この秒数はカメラに顔が映っただけでは話しかけない
 QUIET_AFTER_EXIT = float(os.environ.get("BRAIN_QUIET_AFTER_EXIT", "1800"))
 IDLE_GLANCE_GAP = (float(os.environ.get("BRAIN_IDLE_GLANCE_GAP_MIN", "30")), float(os.environ.get("BRAIN_IDLE_GLANCE_GAP_MAX", "60")))
@@ -414,8 +418,11 @@ class Judge:
                 cur = json.loads(res["result"]["content"][0]["text"])
                 yaw = cur["yaw"] + CAMERA_YAW_SIGN * (p["center_x"] - 0.5) * CAMERA_HFOV
                 yaw = int(max(-60, min(60, yaw)))
-                log.info("[%s] face at x=%.2f -> yaw %d (was %d)", session.device_id, p["center_x"], yaw, cur["yaw"])
-                await self._safe_head(session, yaw, FACE_POSE["pitch"], 250)
+                pitch = cur["pitch"] + CAMERA_PITCH_SIGN * (0.5 - p.get("center_y", 0.5)) * CAMERA_VFOV
+                pitch = int(max(PITCH_RANGE[0], min(PITCH_RANGE[1], pitch)))
+                log.info("[%s] face at x=%.2f y=%.2f -> yaw %d pitch %d (was %d, %d)", session.device_id, p["center_x"],
+                         p.get("center_y", 0.5), yaw, pitch, cur["yaw"], cur["pitch"])
+                await self._safe_head(session, yaw, pitch, 250)
                 return
             except Exception as e:  # noqa: BLE001
                 log.warning("[%s] face tracking failed: %s", session.device_id, e)
