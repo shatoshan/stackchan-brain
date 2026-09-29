@@ -44,8 +44,10 @@ def normalize(text: str) -> str:
 EXIT_WORDS = {w for w in os.environ.get("BRAIN_EXIT_WORDS", "終了,おしまい").split(",") if w}
 # 端末が会話を自動で開いた時に送る MCP 通知（firmware-patches の常時セッション、決定 012）。xiaozhi-server には流さない
 AUTO_OPEN_METHOD = "notifications/stackchan_brain/auto_open"
-# 前のセッションの最後に顔が見えてからこの秒数以内なら、次のセッションでも見え続けているとみなす
-FACE_CARRY_SECONDS = float(os.environ.get("BRAIN_FACE_CARRY_SECONDS", "90"))
+# 顔がこの秒数見えなかった時だけ「いなくなった」とみなす。一瞬見失っただけ（横を向いた、うつむいた）や
+# セッションの開き直しでは「見え続けている」扱いにする。見失うたびに「人が来た」とみなし、
+# 3 分で 3 回「おかえり」と言っていた（#25、2026-09-29）
+FACE_GONE_SECONDS = float(os.environ.get("BRAIN_FACE_GONE_SECONDS", "90"))
 
 # 端末 MCP の呼び出しがこの回数続けて返らなければ、端末はもういない（ホームに戻った等）とみなして閉じる。
 # 端末は接続を閉じずに抜けることがあり、閉じるまで約 80 秒、brain が撮影・首・発話を空打ちしていた（#8、2026-09-27）
@@ -221,16 +223,19 @@ class Relay:
             if session.device_id != device_id:
                 continue
             session.presence = dict(result, checked_at=now)
+            # 見え始めた時刻と最後に見えた時刻は端末ごとに持つ（セッションを開き直しても引き継ぐ）
+            since, last = self.device_face.get(device_id, (0.0, 0.0))
             if result.get("faces"):
-                if not session.face_since:
-                    # 直前のセッションから顔が見え続けているなら、今来たのではない（開き直すたびに「おかえり」と言わない）
-                    since, last = self.device_face.get(device_id, (0.0, 0.0))
-                    session.face_since = since if since and now - last <= FACE_CARRY_SECONDS else now
-                session.last_face_at = now
-                self.device_face[device_id] = (session.face_since, now)
-            else:
-                session.face_since = 0.0
+                if not since or now - last > FACE_GONE_SECONDS:
+                    since = now  # しばらく見えなかった後に見えた = 人が来た
+                self.device_face[device_id] = (since, now)
+                session.face_since, session.last_face_at = since, now
+            elif since and now - last > FACE_GONE_SECONDS:
                 self.device_face.pop(device_id, None)
+                session.face_since = 0.0
+            else:
+                # 一瞬見失っただけ。見え続けている扱いのまま（last_face_at は最後に見えた時刻のまま）
+                session.face_since, session.last_face_at = since, last
             self._record(session, "presence", result)
 
     async def send_emotion(self, session: Session, emotion: str) -> None:

@@ -34,6 +34,9 @@ QUIET_AFTER_ROBOT = float(os.environ.get("BRAIN_QUIET_AFTER_ROBOT", "20"))
 # まだ誰も話していないセッション（ウェイクワードやタッチで開いた直後）は早めに判定する
 QUIET_AFTER_OPEN = float(os.environ.get("BRAIN_QUIET_AFTER_OPEN", "5"))
 MIN_INJECTION_GAP = float(os.environ.get("BRAIN_MIN_INJECTION_GAP", "60"))
+# 状況が変わらないまま「黙る」が続いたら、判定の間隔を INTERVAL の 2 倍から倍々で延ばす（この秒数まで）。
+# 同じ状況に 5 秒ごと 108 回続けて「黙る」と答えさせていた（#26、2026-09-29）
+QUIET_BACKOFF_MAX = float(os.environ.get("BRAIN_QUIET_BACKOFF_MAX", "60"))
 MAX_INJECTIONS_PER_SESSION = int(os.environ.get("BRAIN_MAX_INJECTIONS_PER_SESSION", "4"))
 # Jev が落ちている時の扱い: 一定時間 Jev を呼ばず（指数的に延長）、LLM 判定も間引く
 JEV_COOLDOWN_MIN = float(os.environ.get("BRAIN_JEV_COOLDOWN_MIN", "60"))
@@ -192,6 +195,8 @@ class Judge:
         self.auto_seen: set[str] = set()  # 自動で開いたセッションのうち、休止に入れたもの
         # device_id -> 最近自分から言ったこと（セッションをまたいで持つ）
         self.recent_proactive: dict[str, deque] = {}
+        self.greeted_face: dict[str, float] = {}  # device_id -> あいさつした時の face_since
+        self.backoff: dict[str, tuple] = {}  # session.id -> (状況の要約, 次に判定してよい時刻, 間隔)
         self.proactive_logged: dict[str, float] = {}  # session.id -> 記録済みの差し込み時刻
 
     async def start(self, app) -> None:
@@ -322,6 +327,14 @@ class Judge:
         asyncio.create_task(self._glance(session, yaw, pitch))
         log.info("[%s] idle glance yaw=%d pitch=%d", session.device_id, yaw, pitch)
 
+    @staticmethod
+    def _signature(session: Session) -> tuple:
+        """判定の材料のうち、時間の経過以外で変わるもの。これが同じ間は Jev の答えもほぼ変わらない。"""
+        p = session.presence
+        faces = p.get("faces") if p and time.time() - p.get("checked_at", 0) <= PRESENCE_FRESH else None
+        return (len(session.transcript), session.last_user_at, session.last_robot_end_at, session.injections,
+                bool(faces) if faces is not None else None, session.face_since)
+
     def _collect_proactive(self, session: Session) -> None:
         """差し込み後の最初のロボット発話を「自分から言ったこと」として覚える。"""
         at = session.last_injection_at
@@ -352,6 +365,11 @@ class Judge:
         reason = self._gate(session)
         if reason:
             return
+        # 状況が前回と同じで前回「黙る」だったら、間隔を空ける（#26）
+        signature = self._signature(session)
+        backoff = self.backoff.get(session.id)
+        if backoff and backoff[0] == signature and time.time() < backoff[1]:
+            return
         state = build_state(session, mood, self.memory.get(session.device_id) if self.memory else "")
         started = time.time()
         ans = None
@@ -376,6 +394,12 @@ class Judge:
         threshold = min(0.95, BASE_THRESHOLD + 0.1 * session.injections - 0.2 * (mood - 0.5))
         speak = ans["should_speak"] >= threshold
         action = None
+        # 同じ「人が来た」に 2 度あいさつしない（顔が見え始めた時刻で区別する。#25）
+        arrival_greeted = (ans.get("situation") == "person_arrived" and session.face_since
+                           and self.greeted_face.get(session.device_id) == session.face_since)
+        if speak and arrival_greeted:
+            speak = False
+            action = {"skip": "already_greeted_this_arrival"}
         if not speak and ans.get("situation") in ("person_left_or_busy", "robot_ignored"):
             self.dormant[session.id] = time.time()
             action = {"dormant_until_user_speaks": True}
@@ -393,14 +417,22 @@ class Judge:
                 asyncio.create_task(self._face_person(session))
                 await self.relay.inject(text, mode, session.device_id)
                 self.pending[session.device_id] = time.time()
+                if kind == "person_arrived":
+                    self.greeted_face[session.device_id] = session.face_since
                 action = {"mode": mode, "kind": kind, "text": text, "emotion": ans["emotion"]}
                 log.info("[%s] speak p=%.2f>=%.2f situation=%s kind=%s emotion=%s (%s %.2fs)", session.device_id,
                          ans["should_speak"], threshold, ans["situation"], kind, ans["emotion"], source, latency)
             except InjectError as e:
                 action = {"error": str(e)}
         else:
-            log.info("[%s] stay quiet p=%.2f<%.2f situation=%s (%s %.2fs)", session.device_id, ans["should_speak"], threshold,
-                     ans["situation"], source, latency)
+            log.info("[%s] stay quiet p=%.2f th=%.2f situation=%s%s (%s %.2fs)", session.device_id, ans["should_speak"],
+                     threshold, ans["situation"], " (already greeted)" if arrival_greeted else "", source, latency)
+        if speak or (action or {}).get("dormant_until_user_speaks"):
+            self.backoff.pop(session.id, None)
+        else:
+            same = backoff and backoff[0] == signature
+            interval = min(QUIET_BACKOFF_MAX, backoff[2] * 2 if same else INTERVAL * 2)
+            self.backoff[session.id] = (signature, time.time() + interval, interval)
         self._record({"t": round(time.time(), 3), "device_id": session.device_id, "session": session.id,
                       "source": source, "latency_s": latency, "state": state, "threshold": round(threshold, 2),
                       "answers": {k: v for k, v in ans.items() if k != "raw"}, "raw": ans.get("raw"),
@@ -466,7 +498,7 @@ class Judge:
         while True:
             await asyncio.sleep(INTERVAL)
             # 閉じたセッションの記録を捨てる（常時セッションでは無音タイムアウトのたびに開き直すので溜まる）
-            for ids in (self.dormant, self.next_glance_gap, self.proactive_logged):
+            for ids in (self.dormant, self.next_glance_gap, self.proactive_logged, self.backoff):
                 for sid in [k for k in ids if k not in self.relay.sessions]:
                     del ids[sid]
             self.auto_seen &= self.relay.sessions.keys()
