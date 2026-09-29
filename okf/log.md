@@ -1,6 +1,8 @@
 # Update Log
 
 ## 2026-09-29
+* **Decision**: [決定 013](/decisions/013-self-knowledge-mcp.md)。自分の仕組み・調子・記憶・判断の理由・最近の変化を答える読み取り専用の [self-mcp](/services/self-mcp.md) を xiaozhi-server のサーバー側 MCP につなぐ（human:shingo の指示）。家族向けの [スタックチャン自身の説明](/design/self-profile.md) を追加。疑似端末で evals 5/5、最初の文まで約 4 秒。調べて折り返すエージェント（Agents SDK 等）は第2段階の候補。
+* **Update**: [宛先ゲート](/design/addressee-gate.md)。名前で呼んだ「今日の調子はどう？」が 0.79 で止まったため、名前があれば閾値を 0.5 に下げる。
 * **Creation**: [会話の記憶](/design/conversation-memory.md)（draft、#5）。セッションが閉じたら brain が日本語で要約して端末ごとに保存し、`context_providers`（`GET /context`）と状態ブロブの `memory` に渡す。内蔵の `mem_local_short` は要約の指示も形式も中国語なので使わない。過去の実機ログ 4 件で試し、疑似端末で「名前・予定」を覚えて次のセッションで答えることを確認。
 
 ## 2026-09-27

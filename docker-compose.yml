@@ -28,6 +28,7 @@ services:
     volumes:
       - ./config/xiaozhi/config.template.yaml:/opt/stackchan/config.template.yaml:ro
       - ./config/xiaozhi/render_config.py:/opt/stackchan/render_config.py:ro
+      - ./config/xiaozhi/mcp_server_settings.template.json:/opt/stackchan/mcp_server_settings.template.json:ro
       - ./data/xiaozhi:/opt/xiaozhi-esp32-server/data
       - ./models/SenseVoiceSmall/model.pt:/opt/xiaozhi-esp32-server/models/SenseVoiceSmall/model.pt:ro
     healthcheck:
@@ -68,6 +69,23 @@ services:
       timeout: 5s
       start_period: 10s
       retries: 3
+
+  self-mcp:
+    # スタックチャンが自分のことを答えるための MCP サーバー（mcp/self/server.py、読み取り専用、決定 013）。
+    # 追加ビルドを避けるため mcp ライブラリ同梱の xiaozhi-server イメージで実行する
+    image: ghcr.io/xinnan-tech/xiaozhi-esp32-server:server_0.9.6
+    container_name: self-mcp
+    restart: unless-stopped
+    entrypoint: ["python", "/opt/self-mcp/server.py"]
+    environment:
+      TZ: Asia/Tokyo
+      LLM_MODEL: ${LLM_MODEL:-openai/gpt-6-luna}
+    volumes:
+      - ./mcp/self/server.py:/opt/self-mcp/server.py:ro
+      - ./okf:/okf:ro
+      - ./data/brain:/data/brain:ro
+      - ./data/llm-proxy/gate:/data/gate:ro
+    # ポートは公開しない（compose ネットワーク内の xiaozhi-server からだけ使う）
 
   brain:
     # 端末 ⇔ xiaozhi-server の WebSocket 中継（okf/decisions/007-proactive-speech-path.md）。

@@ -29,6 +29,9 @@ MIN_CONFIDENCE = float(os.environ.get("LLM_GATE_MIN_CONFIDENCE", "0.6"))
 # ロボット宛ての発話が 0.89〜0.97 だったので 0.8（human:shingo の判断）
 ROBOT_MIN = float(os.environ.get("LLM_GATE_ROBOT_MIN", "0.8"))
 RECORD_DIR = Path(os.environ.get("LLM_GATE_RECORD_DIR", "/data/gate"))
+# 名前での呼びかけ（音声認識の表記ゆれを含む）。含まれていればロボット宛ての閾値を NAMED_ROBOT_MIN に下げる
+ROBOT_NAMES = ("スタックチャン", "スタックちゃん", "すたっくちゃん", "StackChan", "stackchan")
+NAMED_ROBOT_MIN = float(os.environ.get("LLM_GATE_NAMED_ROBOT_MIN", "0.5"))
 BACKCHANNELS = ["うんうん。", "そっか。", "なるほどね。", "へえ。", "うん。"]
 # brain が llm モードで差し込む指示（ロボットからの話しかけ）はゲートしない
 BRAIN_INSTRUCTION_PREFIX = "（ロボットから話しかける場面です"
@@ -150,6 +153,10 @@ def decide_from_answers(a: dict, utterance: str, robot_min: float | None = None,
     # 家族の会話が unclear になり LLM に渡っていた。2026-09-27、ラベル付き 9 件はこの規則でも全問正解）。
     # response の action は「ロボットへの操作」の意味なので、ロボット宛てでない時は見ない
     # （「お母さん、醤油取って」は人宛ての頼みごとで action と分類される）
+    # 名前が入っていれば閾値を下げる（「スタックチャン、今日の調子はどう？」が 0.79 で止まっていた）。
+    # 名前だけで通すと、ロボットについての家族の会話（「スタックチャンって最近よくしゃべるよね、ママ」0.07）まで通る
+    if any(n in utterance for n in ROBOT_NAMES):
+        robot_min = min(robot_min, NAMED_ROBOT_MIN)
     if p_robot < robot_min:
         return "drop", None
     if who == "robot" and kind == "none" and kind_p >= min_confidence:

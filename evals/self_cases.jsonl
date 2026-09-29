@@ -1,0 +1,5 @@
+{"id": "how-work", "question": "スタックチャン、きみはどうやって動いてるの？", "expect_any": ["パソコン", "頭脳", "Wi"], "tool": "about_me"}
+{"id": "ears", "question": "スタックチャン、耳の仕組みを詳しく教えて", "expect_any": ["マイク"], "tool": "about_me"}
+{"id": "why-ignored", "question": "スタックチャン、さっきなんで返事しなかったの？", "expect_any": ["自信", "宛て", "向けた", "分から"], "tool": "why"}
+{"id": "status", "question": "スタックチャン、今日の調子はどう？", "expect_any": ["回"], "tool": "my_status"}
+{"id": "changes", "question": "スタックチャン、最近なにが変わったの？", "expect_any": ["覚え", "記憶", "聞き取り", "カメラ"], "tool": "recent_changes"}

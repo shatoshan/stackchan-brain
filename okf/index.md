@@ -24,6 +24,7 @@ okf_version: "0.2"
 
 * [xiaozhi-esp32-server（最小構成）](services/xiaozhi-esp32-server.md) - 起動方法・設定形式・LLM/ASR/TTS の設定キー、OTA、発話押し込み API の有無。
 * [brain](services/brain.md) - 端末 ⇔ xiaozhi-server の WebSocket 中継と会話ログ。自律発話の土台。
+* [self-mcp](services/self-mcp.md) - 自分の仕組み・調子・記憶・判断の理由・最近の変化を答える読み取り専用の MCP サーバー。
 * [llm-proxy](services/llm-proxy.md) - xiaozhi-server → Vercel AI Gateway 中継。reasoning_effort 注入とキー付与。
 
 # external — 外部 API
@@ -39,6 +40,7 @@ okf_version: "0.2"
 * [状態ブロブ仕様](design/state-blob.md) - 直感層に毎周期渡す固定フォーマット JSON。（draft）
 * [カメラで在席を知る](design/camera-presence.md) - ファーム無改変で使えるカメラ経路の調査。take_photo の送り先を brain に向ける案。（draft）
 * [宛先ゲート](design/addressee-gate.md) - LLM を呼ぶ前に Jev で発話の宛先と返事の要否を分類する。（draft）
+* [スタックチャン自身の説明](design/self-profile.md) - 家族向けに体・耳・声・頭脳・目・記憶を平易にまとめたもの。self-mcp が最優先で返す。（draft）
 * [会話の記憶](design/conversation-memory.md) - 会話を日本語で要約して端末ごとに保存し、xiaozhi-server と状態ブロブに渡す。（draft）
 * [直感層の質問設計](design/jev-questions.md) - Jev に状況を分類させる理由、ルール・閾値との分担、evals。（draft）
 
@@ -56,6 +58,7 @@ okf_version: "0.2"
 * [010: シャッター音を消すファームパッチ](decisions/010-firmware-silent-shutter.md) - 原則2に firmware-patches/ の最小パッチの例外を設ける。
 * [011: 常時稼働は USB 給電前提](decisions/011-usb-powered.md) - バッテリー駆動時間と発熱は評価しない。
 * [012: 常時セッション](decisions/012-firmware-always-on-session.md) - 待機が続いたら端末から会話を開き、話すか黙るかは brain が決める。（draft、実機試験待ち）
+* [013: 自分のことを答える self-mcp](decisions/013-self-knowledge-mcp.md) - サーバー側 MCP に読み取り専用のツールをつなぐ。調べて折り返すエージェントは第2段階の候補。
 
 # runbooks — 手順書
 

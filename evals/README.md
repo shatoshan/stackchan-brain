@@ -25,3 +25,11 @@ docker compose exec -T brain python /evals/gate_sweep.py --runs 3 --detail 0.8  
 ```
 
 実際の会話を含むラベル付きデータはローカル（`data/`）のみ。公開してよい代表例だけを匿名化して `gate_cases.jsonl` に移す。
+
+## 自分について答えられるか（self-mcp）
+
+- `self_cases.jsonl` + `self_run.py` — 疑似端末として質問し、返事に期待する語が入っているかを見る（ツールを使わず推測で答える退行を拾う。厳密な正解判定ではない）
+
+```bash
+docker compose exec -T brain python /evals/self_run.py
+```

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "stackchan-self": {
+      "url": "http://self-mcp:8020/mcp",
+      "transport": "streamable-http"
+    }
+  }
+}

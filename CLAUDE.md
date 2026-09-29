@@ -25,11 +25,11 @@ LLM（GPT-6 Luna）と Jev はすべて Vercel AI Gateway 経由で、キーは 
 
 | パス | 内容 |
 |---|---|
-| `docker-compose.yml` | xiaozhi-server（公式イメージ `server_0.9.6`）＋ llm-proxy ＋ brain。mcp-bridge は M4 で追加 |
+| `docker-compose.yml` | xiaozhi-server（公式イメージ `server_0.9.6`）＋ llm-proxy ＋ brain ＋ self-mcp |
 | `llm-proxy/` | xiaozhi-server → Vercel AI Gateway 中継（`reasoning_effort` 注入とキー付与） |
 | `config/xiaozhi/` | xiaozhi-server 上書き設定テンプレートと、起動時に `.env` で展開するスクリプト |
 | `brain/` | 端末 ⇔ xiaozhi-server の WebSocket 中継（8010）、発話差し込み API（127.0.0.1:8011）、カメラ写真の受け口と顔検出（8012）、Jev 判定ループ |
-| `mcp/` | MCP 接続点に繋ぐ MCP サーバー（option-quants、天気等。M4〜） |
+| `mcp/` | xiaozhi-server のサーバー側 MCP に繋ぐ MCP サーバー（`self/` = 自分のことを答える、決定 013。option-quants は M4） |
 | `firmware-patches/` | StackChan 公式ファームに当てるパッチ（決定 010） |
 | `sim/` | 疑似デバイス（`text_client.py`） |
 | `evals/` | 状態ブロブ→Jev 判定の記録と再生（M3〜） |
@@ -47,6 +47,7 @@ curl http://<LAN IP>:8003/xiaozhi/ota/                                   # OTA �
 docker compose exec -T xiaozhi-server python - --url ws://brain:8010/xiaozhi/v1/ "こんにちは" < sim/text_client.py   # 実機と同じ経路で一往復
 curl -s 127.0.0.1:8011/sessions       # brain の中継中セッション（/say で発話を差し込める）
 docker compose exec -T brain python /evals/run.py   # 直感層の回帰テスト（--llm-only で Jev を使わない）
+docker compose exec -T brain python /evals/self_run.py   # 自分のことを聞かれて self-mcp で答えられるか
 python3 evals/label.py                # 実機の判定にラベルを付けて evals を増やす（結果はローカルのみ）
 python3 scripts/check_upstream_strings.py   # xiaozhi-server のイメージを上げたら必ず実行（llm-proxy の置換対象の検査）
 docker compose down
