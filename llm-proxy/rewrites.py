@@ -4,7 +4,7 @@ llm-proxy が使い、scripts/check_upstream_strings.py がイメージ更新時
 文言は xiaozhi-server のイメージ（docker-compose.yml の tag）に依存する。イメージを上げたら必ず検査すること。
 """
 
-# xiaozhi-server server_0.9.6 が差し込む中国語の固定文言 → 日本語。完全一致のみ置換する。
+# xiaozhi-server server_0.9.6〜0.9.8 が差し込む中国語の固定文言 → 日本語。完全一致のみ置換する。
 # 出典: core/connection.py _inject_tool_call_fewshot、core/handle/textHandler/listenMessageHandler.py
 REWRITES = {
     "给我讲个故事吧": "お話を聞かせて",

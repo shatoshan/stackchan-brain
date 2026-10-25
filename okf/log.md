@@ -1,5 +1,10 @@
 # Update Log
 
+## 2026-10-25
+* **Update**: 常時稼働機（Windows + WSL2、amd64、ミラーモードのネットワーク、LAN IP 192.168.3.12）へ移設（M4）。Mac から `.env`・`models/`・`data/` を移し、ファームの `OTA_URL` を `http://192.168.3.12:8003/xiaozhi/ota/` にして書き込み。StackChan が止まっていた原因は、ファームの問い合わせ先が Mac の旧 IP（192.168.3.18）のままだったこと（Mac は 192.168.3.8 に変わり、サーバーも停止済み）。書き込み後、実機が常時セッションで接続し、日本語で一往復・端末 MCP 11 ツールの登録・カメラ呼び出しを確認。
+* **Update**: [xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md) を `server_0.9.8` に（xiaozhi-server と llm-proxy）。0.9.6 同梱の edge-tts 7.2.6 が Microsoft に 403 で拒否され、声が出なくなっていた。`check_upstream_strings.py` は 9/9、疑似端末で音声 68 フレームを確認。
+* **Update**: 0.9.8 は上流のバグ（mcp 2.x 移行で `tool.inputSchema` が残った）でサーバー側 MCP のツールを登録できず、[self-mcp](/services/self-mcp.md)（[決定 013](/decisions/013-self-knowledge-mcp.md)）が使えない。self-mcp は mcp 1.x が要るので `server_0.9.6` のイメージに留める。
+
 ## 2026-09-29
 * **Fix**: 実機の判定記録 304 件から。顔検出のちらつき（見えたり見えなかったり）を「人が来た」とみなし、3 分で 3 回「おかえり」、7 分で 8 回の休止・再開をしていた → 顔が 90 秒見えなかった時だけ「いなくなった」とし、同じ「来た」に 2 度あいさつしない（#25、当日の撮影で「来た」28 → 12 回）。状況が変わらない間の Jev 呼び出しを最大 60 秒まで間引く（#26、判定 307 → 84 回の見積もり）。[brain](/services/brain.md)。
 * **Decision**: [決定 013](/decisions/013-self-knowledge-mcp.md)。自分の仕組み・調子・記憶・判断の理由・最近の変化を答える読み取り専用の [self-mcp](/services/self-mcp.md) を xiaozhi-server のサーバー側 MCP につなぐ（human:shingo の指示）。家族向けの [スタックチャン自身の説明](/design/self-profile.md) を追加。疑似端末で evals 5/5、最初の文まで約 4 秒。調べて折り返すエージェント（Agents SDK 等）は第2段階の候補。

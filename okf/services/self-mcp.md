@@ -12,6 +12,9 @@ sources:
   - id: decision
     resource: /decisions/013-self-knowledge-mcp.md
     title: 決定 013
+  - id: run-1025
+    resource: process:claude-code-session-2026-10-25
+    title: 2026-10-25 xiaozhi-server 0.9.8 への更新時の疑似端末試験
 ---
 
 # 動作
@@ -32,6 +35,9 @@ sources:
 
 - 2026-09-29、疑似端末で `evals/self_run.py` 5/5。最初の文まで 3.3〜4.3 秒（1 回 10.7 秒）。
 - 試験中に見つかったこと: 名前で呼んだ「今日の調子はどう？」が宛先ゲートでロボット宛て 0.79 として止まった → 名前が入っていれば閾値を 0.5 に下げる（→ [宛先ゲート](/design/addressee-gate.md)）。
+- **2026-10-25、xiaozhi-server 0.9.8 では使えない。** 0.9.8 の MCP クライアントがツール登録で失敗する（`'Tool' object has no attribute 'inputSchema'`、上流のバグ。→ [xiaozhi-esp32-server](/services/xiaozhi-esp32-server.md) の「0.9.8 の既知の問題」）。self-mcp 自体は接続・ツール一覧の応答まで正常。[^run-1025]
+- self-mcp は 0.9.6 のイメージ（mcp 1.22.0）で動かしている。0.9.8 のイメージ（mcp 2.3.0）では `mcp.server.fastmcp` が無く（`MCPServer` に改名）起動しない。0.9.8 に揃えるには server.py を mcp 2.x に移行する必要がある（未着手）。[^run-1025]
 
 [^code]: mcp/self/server.py
 [^decision]: 決定 013
+[^run-1025]: 2026-10-25 xiaozhi-server 0.9.8 への更新時の疑似端末試験

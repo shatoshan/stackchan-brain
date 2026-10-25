@@ -25,7 +25,7 @@ LLM（GPT-6 Luna）と Jev はすべて Vercel AI Gateway 経由で、キーは 
 
 | パス | 内容 |
 |---|---|
-| `docker-compose.yml` | xiaozhi-server（公式イメージ `server_0.9.6`）＋ llm-proxy ＋ brain ＋ self-mcp |
+| `docker-compose.yml` | xiaozhi-server（公式イメージ `server_0.9.8`）＋ llm-proxy ＋ brain ＋ self-mcp（mcp 1.x が要るので `server_0.9.6`） |
 | `llm-proxy/` | xiaozhi-server → Vercel AI Gateway 中継（`reasoning_effort` 注入とキー付与） |
 | `config/xiaozhi/` | xiaozhi-server 上書き設定テンプレートと、起動時に `.env` で展開するスクリプト |
 | `brain/` | 端末 ⇔ xiaozhi-server の WebSocket 中継（8010）、発話差し込み API（127.0.0.1:8011）、カメラ写真の受け口と顔検出（8012）、Jev 判定ループ |
