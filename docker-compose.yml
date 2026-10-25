@@ -6,7 +6,7 @@
 services:
   xiaozhi-server:
     # 本体は改変せず公式イメージに依存する（CLAUDE.md 原則1）。arm64 / amd64 両対応
-    image: ghcr.io/xinnan-tech/xiaozhi-esp32-server:server_0.9.6
+    image: ghcr.io/xinnan-tech/xiaozhi-esp32-server:server_0.9.8
     container_name: xiaozhi-esp32-server
     restart: unless-stopped
     security_opt:
@@ -41,7 +41,7 @@ services:
   llm-proxy:
     # reasoning_effort の注入と Gateway キーの付与だけを行う中継（llm-proxy/proxy.py）。
     # 追加ビルドを避けるため aiohttp 同梱の xiaozhi-server イメージで実行する
-    image: ghcr.io/xinnan-tech/xiaozhi-esp32-server:server_0.9.6
+    image: ghcr.io/xinnan-tech/xiaozhi-esp32-server:server_0.9.8
     container_name: llm-proxy
     restart: unless-stopped
     entrypoint: ["python", "/opt/llm-proxy/proxy.py"]
@@ -72,7 +72,8 @@ services:
 
   self-mcp:
     # スタックチャンが自分のことを答えるための MCP サーバー（mcp/self/server.py、読み取り専用、決定 013）。
-    # 追加ビルドを避けるため mcp ライブラリ同梱の xiaozhi-server イメージで実行する
+    # 追加ビルドを避けるため mcp ライブラリ同梱の xiaozhi-server イメージで実行する。
+    # server_0.9.8 は mcp 2.x で FastMCP が無いため、server.py を移行するまで 0.9.6（mcp 1.22.0）に留める
     image: ghcr.io/xinnan-tech/xiaozhi-esp32-server:server_0.9.6
     container_name: self-mcp
     restart: unless-stopped

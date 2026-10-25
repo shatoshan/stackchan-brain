@@ -73,6 +73,18 @@ sources:
   - id: run-0927
     resource: process:claude-code-session-2026-09-27
     title: 2026-09-27 常時セッションの実機試験
+  - id: rel-098
+    resource: https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/8f2dda09cf18f1c1ece0f906eee4cc2fabb7fb58/main/xiaozhi-server/requirements.txt
+    title: v0.9.8 requirements.txt（edge_tts==7.3.1、mcp==2.3.0。v0.9.6 / v0.9.7 は edge_tts==7.2.6、mcp==1.22.0）
+  - id: mcp-client-098
+    resource: https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/8f2dda09cf18f1c1ece0f906eee4cc2fabb7fb58/main/xiaozhi-server/core/providers/tools/server_mcp/mcp_client.py
+    title: v0.9.8 server_mcp/mcp_client.py（110 行目 tool.inputSchema）
+  - id: edge-fix
+    resource: https://github.com/xinnan-tech/xiaozhi-esp32-server/pull/3435
+    title: edge-tts 容忍坏 metadata 帧并升依赖 7.3.1（2026-10 の Edge TTS 403 対応の一つ）
+  - id: run-1025
+    resource: process:claude-code-session-2026-10-25
+    title: 2026-10-25 常時稼働機（Windows + WSL2、amd64）への移設と 0.9.8 への更新
 ---
 
 # 位置づけ
@@ -92,11 +104,13 @@ sources:
 
 # Docker イメージ
 
-- `ghcr.io/xinnan-tech/xiaozhi-esp32-server:server_<version>` / `server_latest`。最新リリースは **v0.9.6（2026-07-24）**。
+- `ghcr.io/xinnan-tech/xiaozhi-esp32-server:server_<version>` / `server_latest`。最新リリースは **v0.9.8（2026-10-23）**（v0.9.6 は 2026-07-24、v0.9.7 は 2026-09-29）。
 - **arm64 も提供されている**。Deployment.md には「0.8.2 以降は x86 のみ、arm64 は自前ビルド」とあるが、これは古い記述。CI（docker-image.yml）は `linux/amd64,linux/arm64` でビルドしており、GHCR の `server_0.9.6` / `server_latest` のマニフェストにも `linux/arm64` がある。[^deploy] [^ci] [^ghcr]
-- 本リポジトリは `server_0.9.6` に固定。キー名はこのイメージ内の `config.yaml` でも同一であることを確認済み。
+- 本リポジトリは xiaozhi-server と llm-proxy を `server_0.9.8` に固定（2026-10-25、0.9.6 から）。self-mcp だけは `server_0.9.6` に留める（下の「0.9.8 の既知の問題」）。0.9.6 → 0.9.8 の `config.yaml` の差分は `tts_timeout` 10 → 15 と、使っていないプロバイダの既定モデル名・コメントだけで、本リポジトリが上書きするキーは変わっていない。[^run-1025]
+- **Edge TTS が 403 で失敗する（2026-10〜）**: edge-tts 7.2.6（v0.9.6 / v0.9.7 同梱）は `Sec-MS-GEC-Version=1-…` で接続し、Microsoft 側が 403 で拒否する。7.3.1 は `2-…` で通る。2026-10-25 に同じ PC から両方を試して確認。v0.9.8 で 7.3.1 に上がった。症状は、LLM の返答は出ているのに `tts` が `start` → `stop` だけで音声フレームが 0 個、ログに `Edge TTS请求失败: 403`。[^rel-098] [^edge-fix] [^run-1025]
+- **0.9.8 の既知の問題: サーバー側 MCP のツールが登録されない**: v0.9.8 で `mcp` が 2.3.0 に上がったが、`server_mcp/mcp_client.py` は `tool.inputSchema`（1.x の名前）のまま。接続とツール一覧の取得までは成功し、登録時に `'Tool' object has no attribute 'inputSchema'` で失敗する。2026-10-25 時点で `main` も未修正。[self-mcp](/services/self-mcp.md) が使えなくなる。端末 MCP（首・LED）は dict のまま扱う別経路なので影響しない（2026-10-25 実機で 11 ツールの登録を確認）。[^mcp-client-098] [^run-1025]
 - 公式 compose はミラー `ghcr.nju.edu.cn` を使うが、中国国外では `ghcr.io` を直接使えばよい。
-- イメージは約 3GB（arm64、展開後）。
+- イメージは約 3GB（arm64、展開後）。amd64（Windows + WSL2）でも同じタグで動く（2026-10-25）。[^run-1025]
 
 # 起動に必要なファイル（最小構成）
 
@@ -237,3 +251,7 @@ TTS:
 [^prompt-mgr]: core/utils/prompt_manager.py
 [^vad]: core/providers/vad/silero.py
 [^run-0927]: 2026-09-27 常時セッションの実機試験
+[^rel-098]: v0.9.8 requirements.txt
+[^mcp-client-098]: v0.9.8 server_mcp/mcp_client.py
+[^edge-fix]: xinnan-tech/xiaozhi-esp32-server#3435
+[^run-1025]: 2026-10-25 常時稼働機への移設と 0.9.8 への更新
